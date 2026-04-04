@@ -1,0 +1,15 @@
+SITE_URL=https://esimcn.net
+PRIMARY_KEYWORD=esim china
+DEFAULT_SUPPORT_EMAIL=support@esimcn.net
+PAYMENT_BANK_CODE=mb
+PAYMENT_ACCOUNT_NUMBER=7380113833666
+PAYMENT_ACCOUNT_NAME=NGO MINH SON
+PAYMENT_NOTIFY_FROM=eSIM CN <esim@esimcn.net>
+PAYMENT_NOTIFY_REPLY_TO=esim@esimcn.net
+PAYMENT_NOTIFY_BCC=sonhangtravel@gmail.com
+PAYMENT_WEBHOOK_SECRET=change_me
+RESEND_API_KEY=your_resend_api_key_here
+ESIM_ACCESS_CODE=your_access_code_here
+ESIM_ACCESS_SECRET=your_secret_here
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change_me

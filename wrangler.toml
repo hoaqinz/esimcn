@@ -1,0 +1,22 @@
+name = "esimcn-net"
+main = "src/worker.ts"
+compatibility_date = "2026-03-27"
+workers_dev = true
+minify = true
+
+[vars]
+SITE_URL = "https://esimcn.net"
+PRIMARY_KEYWORD = "esim china"
+DEFAULT_SUPPORT_EMAIL = "support@esimcn.net"
+PAYMENT_BANK_CODE = "mb"
+PAYMENT_ACCOUNT_NUMBER = "7380113833666"
+PAYMENT_ACCOUNT_NAME = "NGO MINH SON"
+PAYMENT_NOTIFY_FROM = "eSIM CN <esim@esimcn.net>"
+PAYMENT_NOTIFY_REPLY_TO = "esim@esimcn.net"
+PAYMENT_NOTIFY_BCC = "sonhangtravel@gmail.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "esimcn-db"
+database_id = "f0f911e7-eee0-41e3-9ee7-a57f70321e37"
+migrations_dir = "migrations"

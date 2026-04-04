@@ -6,12 +6,20 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "dev": "wrangler dev",
+    "check": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply esimcn-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply esimcn-db --remote"
   },
   "dependencies": {
-    "astro": "^6.1.1"
+    "hono": "^4.12.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "node-addon-api": "^8.7.0",
+    "node-gyp": "^12.2.0",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.77.0"
   }
 }

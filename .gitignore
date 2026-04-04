@@ -16,9 +16,21 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+.dev.vars
+.wrangler/
 
 # macOS-specific files
 .DS_Store
+**/.DS_Store
 
 # jetbrains setting folder
 .idea/
+
+# local test artifacts
+.playwright-cli/
+.wrangler-out/
+screenshots/
+output/
+.codex-home-*.png
+screens-mobile-review.png
+cloudflare-live/
