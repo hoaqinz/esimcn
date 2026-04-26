@@ -4,6 +4,14 @@ compatibility_date = "2026-03-27"
 workers_dev = true
 minify = true
 
+[[routes]]
+pattern = "esimcn.net"
+custom_domain = true
+
+[[routes]]
+pattern = "www.esimcn.net"
+custom_domain = true
+
 [vars]
 SITE_URL = "https://esimcn.net"
 PRIMARY_KEYWORD = "esim china"
@@ -14,9 +22,14 @@ PAYMENT_ACCOUNT_NAME = "NGO MINH SON"
 PAYMENT_NOTIFY_FROM = "eSIM CN <esim@esimcn.net>"
 PAYMENT_NOTIFY_REPLY_TO = "esim@esimcn.net"
 PAYMENT_NOTIFY_BCC = "sonhangtravel@gmail.com"
+PAYMENT_FORWARD_NTA_URL = "https://esimgiare-admin-api.thaonguyenngu999.workers.dev/api/payment-webhook-forward"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "esimcn-db"
 database_id = "f0f911e7-eee0-41e3-9ee7-a57f70321e37"
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "SITE_ASSETS_BUCKET"
+bucket_name = "esimcn-site-assets"

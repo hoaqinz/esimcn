@@ -9,3 +9,7 @@
 
 ### Added
 - Added admin dashboard with login, order monitoring, webhook event view, and pricing override controls.
+- Added a self-hosted website chat widget with D1-backed chat sessions/messages, China eSIM-focused quick replies, and optional OpenClaw webhook integration.
+
+### Removed
+- Removed the expired third-party LiveChat embed from the storefront.

@@ -265,28 +265,35 @@ export const articles: Article[] = [
     description:
       'Hướng dẫn chọn gói eSIM China theo số ngày đi, mức độ dùng data và lộ trình thực tế của bạn.',
     excerpt:
-      'Chọn đúng gói eSIM sẽ giúp bạn không mua thừa data, nhưng vẫn đủ dùng cho maps, đặt xe, liên lạc và hotspot.',
+      'Chọn đúng gói eSIM sẽ giúp bạn không mua thừa data nhưng vẫn đủ dùng cho maps, đặt xe, liên lạc và các app cần thiết trong suốt chuyến đi.',
     updatedAt: '2026-03-27',
     updatedLabel: '27/03/2026',
-    readingTime: '5 phút đọc',
+    readingTime: '6 phút đọc',
     sections: [
       {
-        heading: 'Đúng nhất vẫn là chọn theo lịch trình thật',
+        heading: 'Chọn theo lịch trình thật luôn dễ trúng hơn chọn theo cảm giác',
         paragraphs: [
-          'Nếu bạn chỉ đi 3 đến 5 ngày, gói nhỏ sẽ hợp hơn. Nếu đi 1 đến 2 tuần, gói 3GB thường là để cân bằng chi phí và trải nghiệm sử dụng.',
-          'Với khách ở lâu hoặc cần phát hotspot cho laptop, gói 10GB hoặc gói liên vùng sẽ hợp lý hơn nhiều.',
+          'Sai lầm phổ biến nhất là chỉ nhìn giá rồi chọn gói rẻ nhất. Với eSIM Trung Quốc, điều quan trọng hơn là bạn đi bao nhiêu ngày, dùng maps nhiều hay ít, có đặt xe thường xuyên không, có cần phát hotspot cho laptop hay không và có đi nhiều điểm trong cùng một chuyến hay không.',
+          'Nếu chỉ đi 3 đến 5 ngày và chủ yếu dùng maps, nhắn tin, gọi xe, gói nhẹ thường đã đủ. Nếu đi 1 đến 2 tuần, nhóm gói cân bằng sẽ dễ dùng hơn vì đỡ phải canh từng GB. Nếu ở lâu hoặc cần internet ổn định để làm việc, nên nhìn sang gói nhiều data hoặc gói có thể mua thêm dung lượng trong quá trình sử dụng.',
         ],
         bullets: [
-          'Đi ngắn ngày: ưu tiên gói tiết kiệm',
-          'Đi 1 đến 2 tuần: ưu tiên gói cân bằng',
-          'Đi lâu hoặc công tác: ưu tiên gói nhiều data',
+          'Đi ngắn ngày: ưu tiên gói tiết kiệm và dễ kích hoạt',
+          'Đi 1 đến 2 tuần: ưu tiên gói cân bằng, đỡ áp lực canh data',
+          'Đi lâu hoặc công tác: ưu tiên gói nhiều data hoặc gói có hỗ trợ nạp thêm',
         ],
       },
       {
-        heading: 'Không nên nhìn giá mà bỏ qua cách dùng',
+        heading: 'Đừng chỉ nhìn dung lượng, hãy nhìn cả cách dùng app',
         paragraphs: [
-          'Giá rẻ nhất không có nghĩa là hợp nhất. Nếu mua gói quá nhỏ, bạn có thể phải bổ sung hoặc bị hụt data quá nhanh vì maps, dịch thuật và video call.',
-          'Trang bán hàng tốt là trang giúp khách nhìn rõ đối tượng phù hợp cho từng gói, không bắt khách đoán.',
+          'Với nhiều khách đi Trung Quốc, nhu cầu thật không chỉ là có mạng. Họ cần Google Maps, Gmail, Translate, đặt xe, Facebook hoặc TikTok dùng ổn định trong lúc di chuyển. Vì vậy khi xem gói, nên nhìn rõ phần mô tả hỗ trợ ứng dụng chứ không chỉ nhìn giá.',
+          'Nếu lịch trình phụ thuộc mạnh vào chỉ đường, dịch thuật và liên lạc nhanh, nên ưu tiên các gói đã được ghi rõ là phù hợp cho nhóm nhu cầu đó. Cách này thực tế hơn nhiều so với việc mua một gói thật rẻ rồi đến lúc dùng mới phát hiện trải nghiệm không đúng kỳ vọng.',
+        ],
+      },
+      {
+        heading: 'Cách chọn nhanh nếu bạn không muốn đọc quá nhiều',
+        paragraphs: [
+          'Nếu chưa biết bắt đầu từ đâu, cứ dùng logic đơn giản: đi ít ngày chọn gói nhẹ, đi 1 đến 2 tuần chọn gói cân bằng, đi lâu chọn gói data cao hơn. Nếu có cả Hong Kong hoặc Macau trong lịch trình, nên cân nhắc gói liên vùng để khỏi đổi gói giữa chuyến.',
+          'Một website bán eSIM tốt không bắt khách đoán. Nó phải cho bạn nhìn rõ gói nào hợp với chuyến đi nào, gói nào có thể nạp thêm, và gói nào phù hợp hơn nếu bạn cần các app phổ biến dùng ổn định.',
         ],
       },
     ],
@@ -300,19 +307,27 @@ export const articles: Article[] = [
       'Cách nhanh nhất là cài profile trước, đặt tên line rõ ràng và bật line data khi đến Trung Quốc.',
     updatedAt: '2026-03-27',
     updatedLabel: '27/03/2026',
-    readingTime: '4 phút đọc',
+    readingTime: '6 phút đọc',
     sections: [
       {
         heading: 'Kiểm tra máy trước khi mua',
         paragraphs: [
-          'Máy phải hỗ trợ eSIM và đã mở mạng. Đây là bước quan trọng nhất vì nếu máy không hỗ trợ thì gói data tốt đến đâu cũng không dùng được.',
+          'Việc đầu tiên luôn là kiểm tra máy có hỗ trợ eSIM và đã mở mạng hay chưa. Nếu bỏ qua bước này, bạn có thể nghĩ rằng gói bị lỗi trong khi thực tế nguyên nhân nằm ở thiết bị.',
+          'Chỉ cần chắc được hai việc đó, phần còn lại sẽ đơn giản hơn rất nhiều. Đây là bước nên làm trước cả khi so giá, vì giá tốt cũng không có ý nghĩa nếu máy không cài được.',
         ],
       },
       {
-        heading: 'Cài profile trước chuyến bay',
+        heading: 'Nên cài profile trước ở Việt Nam, nhưng không cần bật line data ngay',
         paragraphs: [
-          'Sau khi nhận QR, bạn có thể cài profile trước, đặt tên để dễ nhận biết và giữ line chính gọn gàng.',
-          'Khi đến nơi, chỉ cần bật line data đúng cách là có thể sử dụng ngay mà không phải tìm điểm bán SIM vật lý.',
+          'Sau khi nhận QR, bạn có thể cài profile trước ở nhà, đặt tên line thật rõ như “eSIM Trung Quốc” để tránh nhầm với SIM chính. Làm vậy sẽ giúp bạn phát hiện sớm nếu có vướng ở bước cài đặt.',
+          'Đến khi hạ cánh, bạn chỉ cần bật đúng line data và kiểm tra lại cài đặt dữ liệu di động. Cách làm này chủ động hơn nhiều so với việc đến nơi mới bắt đầu xử lý từng bước.',
+        ],
+      },
+      {
+        heading: 'Vì sao nên làm xong từ trước chuyến đi',
+        paragraphs: [
+          'Khách đi lần đầu thường chỉ thấy lợi ở việc “đỡ phải tìm SIM vật lý”, nhưng lợi lớn hơn là bạn sẽ có internet ngay khi cần gọi xe, xem bản đồ, nhắn cho khách sạn hoặc liên hệ người đón tại sân bay.',
+          'Nếu để đến nơi mới cài, bất kỳ lỗi nhỏ nào cũng khiến bạn mất thời gian hơn nhiều. Với chuyến đi ngắn hoặc lịch trình sát giờ, xử lý trước vẫn là phương án an toàn nhất.',
         ],
       },
     ],
@@ -326,20 +341,229 @@ export const articles: Article[] = [
       'Với nhiều người, lợi thế lớn nhất của eSIM không chỉ là giá, mà là sự chủ động trước khi hạ cánh.',
     updatedAt: '2026-03-27',
     updatedLabel: '27/03/2026',
-    readingTime: '4 phút đọc',
+    readingTime: '5 phút đọc',
     sections: [
       {
         heading: 'eSIM mạnh ở độ chủ động',
         paragraphs: [
-          'Bạn có thể xử lý xong phần data trước khi bay, đến nơi bật máy lên là có internet để tìm đường, đặt xe và liên lạc.',
-          'SIM vật lý vẫn có lợi thế riêng với người cần số nội địa, nhưng đối với khách du lịch ngắn ngày thì eSIM thường gọn hơn.',
+          'Điểm mạnh lớn nhất của eSIM là bạn có thể xử lý xong phần data trước khi bay. Khi đến nơi, bật máy lên là có internet để tìm đường, đặt xe và liên lạc ngay.',
+          'Với khách du lịch ngắn ngày hoặc khách công tác cần sự gọn gàng, eSIM thường hợp hơn vì không phải tháo SIM chính và không phải mất thời gian đi mua tại quầy.',
         ],
       },
       {
-        heading: 'Nên chọn theo mục đích chuyến đi',
+        heading: 'SIM vật lý vẫn có chỗ đứng riêng',
         paragraphs: [
-          'Nếu cần online ngay, không muốn thay SIM và ưu tiên sự tiện lợi, eSIM là lựa chọn hợp lý.',
-          'Nếu cần một giải pháp dài hạn gắn với số nội địa, SIM vật lý có thể phù hợp hơn. Trang bán hàng cần nói rõ điều này để tránh kỳ vọng sai.',
+          'SIM vật lý vẫn phù hợp với người cần số nội địa hoặc cần một giải pháp dùng dài hạn gắn với nhu cầu nghe gọi địa phương. Đây là điểm eSIM du lịch không phải lúc nào cũng thay thế hoàn toàn.',
+          'Vì vậy cách chọn đúng không phải là hỏi cái nào “tốt hơn tuyệt đối”, mà là hỏi chuyến đi của bạn đang ưu tiên sự chủ động, sự tiện hay một nhu cầu rất cụ thể như số nội địa.',
+        ],
+      },
+      {
+        heading: 'Nếu mục tiêu là lên mạng ngay khi hạ cánh, eSIM thường hợp hơn',
+        paragraphs: [
+          'Với phần lớn khách du lịch và khách đi ngắn ngày, eSIM đủ để giải quyết đúng nhu cầu quan trọng nhất: có internet sớm, không rối thao tác và không phải thay SIM chính.',
+          'Một website bán hàng nên nói rõ điểm này để khách chọn đúng ngay từ đầu, thay vì so sánh kiểu chung chung. Khi chọn đúng mục đích, trải nghiệm dùng sẽ tốt hơn nhiều.',
+        ],
+      },
+    ],
+  },
+  {
+    slug: 'esim-trung-quoc-co-dung-duoc-google-khong',
+    title: 'eSIM Trung Quốc có dùng được Google, Gmail, Maps và TikTok không?',
+    description:
+      'Giải thích rõ việc dùng Google trên eSIM Trung Quốc, khi nào dùng được và nên chọn gói nào để đỡ rủi ro trước chuyến đi.',
+    excerpt:
+      'Đây là câu hỏi khách hỏi nhiều nhất trước khi mua. Không phải gói nào cũng cho trải nghiệm giống nhau, nên phải nhìn rõ mô tả hỗ trợ ứng dụng của từng gói.',
+    updatedAt: '2026-04-05',
+    updatedLabel: '05/04/2026',
+    readingTime: '7 phút đọc',
+    sections: [
+      {
+        heading: 'Khách hỏi nhiều nhất vẫn là: có dùng được Google với TikTok không?',
+        paragraphs: [
+          'Với khách đi Trung Quốc, chuyện có mạng chỉ là điều kiện đầu tiên. Điều họ thật sự quan tâm là có dùng được Google Maps, Gmail, Google Translate, Facebook và TikTok ổn định trong lúc di chuyển hay không.',
+          'Đó cũng là lý do website của mình đang ưu tiên hiển thị rõ các gói phù hợp với nhóm nhu cầu này. Khách không nên phải tự đoán sau khi đã thanh toán.',
+        ],
+        bullets: [
+          'Nếu cần Maps, Gmail và Translate: chọn gói có mô tả rõ hỗ trợ ứng dụng',
+          'Nếu cần TikTok ổn định: ưu tiên gói có badge hoặc note hỗ trợ TikTok',
+          'Nếu chỉ cần data cơ bản: có thể chọn gói nhẹ hơn để tiết kiệm',
+        ],
+      },
+      {
+        heading: 'Không nên mua chỉ theo dung lượng nếu app sử dụng mới là nhu cầu chính',
+        paragraphs: [
+          'Ví dụ cùng là 3GB hoặc 5GB nhưng trải nghiệm thực tế với khách cần chỉ đường, dịch thuật và xem thông tin nhanh có thể rất khác nếu gói đó không được mô tả rõ về nhóm ứng dụng hỗ trợ.',
+          'Nếu bạn đi tự túc, cần chỉ đường liên tục, gọi xe, mở mail công việc hoặc cần dùng TikTok, hãy xem phần note của gói trước. Đây là chỗ đáng đọc hơn cả con số GB.',
+        ],
+      },
+      {
+        heading: 'Một số gói còn hỗ trợ mua thêm dung lượng nếu lịch trình kéo dài hơn dự kiến',
+        paragraphs: [
+          'Không phải gói nào cũng có tính năng này, nhưng với một số gói phù hợp, khách có thể mua thêm dung lượng trong quá trình sử dụng thay vì phải đổi sang một eSIM khác. Đây là điểm rất tiện nếu chuyến đi phát sinh hoặc mức dùng data thực tế cao hơn dự tính ban đầu.',
+          'Cách an toàn nhất vẫn là chọn đúng gói ngay từ đầu. Nhưng nếu bạn là kiểu khách hay phát sinh lịch trình, nên ưu tiên những gói có ghi rõ là có thể nạp thêm để đỡ bị động.',
+        ],
+      },
+      {
+        heading: 'Kết luận ngắn gọn: muốn đỡ rủi ro, chọn gói đã được website chọn sẵn',
+        paragraphs: [
+          'Nếu mục tiêu của bạn là cài xong dùng được luôn cho Google, Gmail, Maps và TikTok, đừng chọn chỉ theo giá. Hãy ưu tiên các gói đã được website đánh dấu rõ cho nhóm nhu cầu đó.',
+          'Cách này thực tế hơn, ít phải support hơn và cũng đúng với tinh thần của website: nhìn vào là biết gói nào hợp với mình, thay vì mua xong mới kiểm tra lại từng thứ.',
+        ],
+      },
+    ],
+  },
+  {
+    slug: 'mua-esim-trung-quoc-o-viet-nam-hay-den-noi-moi-mua',
+    title: 'Nên mua eSIM Trung Quốc ở Việt Nam hay đến nơi rồi mới mua?',
+    description:
+      'So sánh hai cách mua phổ biến để biết thời điểm nào hợp lý hơn cho chuyến đi Trung Quốc, Hong Kong hoặc Macau.',
+    excerpt:
+      'Đa số khách du lịch ngắn ngày sẽ lợi hơn khi xử lý xong phần data trước lúc bay, thay vì tới nơi mới đi tìm quầy SIM hoặc tự mò gói phù hợp.',
+    updatedAt: '2026-04-05',
+    updatedLabel: '05/04/2026',
+    readingTime: '6 phút đọc',
+    sections: [
+      {
+        heading: 'Mua trước ở Việt Nam thường chủ động hơn',
+        paragraphs: [
+          'Nếu mua trước, bạn sẽ có thời gian kiểm tra máy, nhận QR, cài profile và lưu sẵn hướng dẫn. Khi hạ cánh chỉ cần bật đúng line data là có thể dùng ngay.',
+          'Điều này đặc biệt quan trọng với khách cần internet ngay để gọi xe, mở bản đồ, liên lạc với khách sạn hoặc xử lý việc nhập cảnh và di chuyển nội địa.',
+        ],
+      },
+      {
+        heading: 'Đến nơi mới mua chỉ hợp khi bạn chấp nhận đổi lấy sự linh hoạt',
+        paragraphs: [
+          'Một số khách muốn tới nơi mới quyết định vì lịch trình chưa chốt hoặc chưa chắc mức dùng data. Cách này không sai, nhưng đổi lại là bạn phải dành thời gian tìm điểm bán, so gói, chờ hỗ trợ và xử lý ngay lúc đang cần internet nhất.',
+          'Với khách đi ngắn ngày, phần thời gian và công sức mất đi thường lớn hơn nhiều so với chênh lệch giá giữa các gói phổ biến.',
+        ],
+        bullets: [
+          'Đi công tác hoặc cần online ngay: nên mua trước',
+          'Đi tự túc lần đầu: nên mua trước để giảm rủi ro',
+          'Lịch trình chưa chốt và không gấp: có thể cân nhắc mua sau',
+        ],
+      },
+      {
+        heading: 'Nếu website đã chọn sẵn gói theo nhu cầu thì mua trước càng có lợi',
+        paragraphs: [
+          'Lợi thế của một website bán eSIM tốt là khách có thể nhìn thấy ngay nhóm gói theo ngày, gói trọn gói, gói hỗ trợ ứng dụng phổ biến và cả các gói có thể mua thêm dung lượng. Như vậy quyết định mua trước sẽ dễ hơn nhiều.',
+          'Nói ngắn gọn: nếu bạn đã xác định được lịch trình và mục đích chuyến đi, mua trước ở Việt Nam gần như luôn là cách gọn hơn.',
+        ],
+      },
+    ],
+  },
+  {
+    slug: 'esim-trung-quoc-cho-iphone-can-luu-y-gi',
+    title: 'Mua eSIM Trung Quốc cho iPhone cần lưu ý gì trước chuyến đi?',
+    description:
+      'Những điểm cần kiểm tra trên iPhone trước khi mua eSIM Trung Quốc để tránh lỗi cài đặt hoặc lỗi không kích hoạt được khi đã đến nơi.',
+    excerpt:
+      'Khách dùng iPhone thường nghĩ cứ có QR là cài được, nhưng thực tế vẫn cần kiểm tra model, khóa mạng và cách đặt line data cho đúng.',
+    updatedAt: '2026-04-05',
+    updatedLabel: '05/04/2026',
+    readingTime: '6 phút đọc',
+    sections: [
+      {
+        heading: 'Ba việc nên kiểm tra trước khi mua',
+        paragraphs: [
+          'Đầu tiên là iPhone có hỗ trợ eSIM hay không. Thứ hai là máy có bị khóa mạng hay không. Thứ ba là bạn đã sẵn sàng tách line chính và line data để lúc dùng không bị nhầm chưa.',
+          'Ba bước này nghe đơn giản nhưng lại là nguyên nhân chính khiến nhiều khách nghĩ rằng eSIM có vấn đề. Thực tế đa số lỗi phát sinh đều nằm ở bước kiểm tra máy hoặc cài đặt line.',
+        ],
+        bullets: [
+          'Kiểm tra mục eSIM trong cài đặt di động',
+          'Kiểm tra tình trạng khóa mạng trước khi bay',
+          'Đặt tên line rõ ràng: SIM chính và eSIM Trung Quốc',
+        ],
+      },
+      {
+        heading: 'Nên cài trước, nhưng chỉ bật data khi đến nơi',
+        paragraphs: [
+          'Cách làm an toàn là cài profile tại Việt Nam để chắc rằng QR hoạt động bình thường. Sau đó giữ line ở trạng thái chưa dùng data cho đến khi tới điểm đến.',
+          'Nếu có vướng ở bước cài, bạn vẫn còn thời gian xử lý trước chuyến bay thay vì đứng ở sân bay rồi mới bắt đầu thử từng cách một.',
+        ],
+      },
+      {
+        heading: 'Nếu cần Google Maps, Gmail hoặc TikTok thì nên nhìn kỹ mô tả gói ngay từ đầu',
+        paragraphs: [
+          'Với khách dùng iPhone, phần cài đặt thường không khó bằng phần chọn nhầm gói. Nếu chuyến đi phụ thuộc nhiều vào Maps, Gmail, Translate hoặc TikTok, hãy ưu tiên gói có mô tả rõ phần hỗ trợ ứng dụng.',
+          'iPhone cài được không có nghĩa là trải nghiệm dùng app nào cũng giống nhau. Chọn đúng gói từ đầu vẫn là bước quan trọng nhất.',
+        ],
+      },
+    ],
+  },
+  {
+    slug: 'di-hong-kong-macau-co-nen-mua-goi-lien-vung-khong',
+    title: 'Đi Hong Kong và Macau có nên mua gói liên vùng không?',
+    description:
+      'Khi lịch trình có cả Trung Quốc đại lục, Hong Kong hoặc Macau, gói liên vùng thường tiện hơn việc tách nhiều gói nhỏ.',
+    excerpt:
+      'Đi nhiều điểm trong một chuyến là lúc gói liên vùng phát huy giá trị, vì bạn không phải đổi gói giữa hành trình.',
+    updatedAt: '2026-04-05',
+    updatedLabel: '05/04/2026',
+    readingTime: '6 phút đọc',
+    sections: [
+      {
+        heading: 'Gói liên vùng hợp nhất khi lịch trình di chuyển liên tục',
+        paragraphs: [
+          'Nếu bạn bay đến Hong Kong rồi sang Thâm Quyến, hoặc đi kết hợp Macau trong cùng chuyến, dùng một gói liên vùng thường gọn hơn nhiều so với việc mua rời từng nơi.',
+          'Lợi ích rõ nhất là không phải đổi eSIM giữa chuyến, không phải theo dõi nhiều QR và không sợ đang di chuyển lại phải kiểm tra xem mình đang bật đúng gói nào.',
+        ],
+      },
+      {
+        heading: 'Không phải lúc nào cũng cần mua liên vùng',
+        paragraphs: [
+          'Nếu bạn chỉ ở một nơi trong suốt chuyến đi, gói chuyên cho đúng điểm đến vẫn có thể tiết kiệm hơn. Gói liên vùng chỉ thật sự đáng tiền khi nó giúp giảm thao tác và giảm rủi ro cho cả hành trình.',
+          'Cách chọn đúng là nhìn vào số chặng thực tế, số lần đổi vùng và mức độ phụ thuộc vào internet khi đang di chuyển giữa các điểm.',
+        ],
+        bullets: [
+          'Chỉ ở đại lục: chọn gói đại lục',
+          'Chỉ ở Hong Kong hoặc Macau: chọn gói riêng đúng điểm đến',
+          'Đi nhiều nơi trong một chuyến: ưu tiên gói liên vùng',
+        ],
+      },
+      {
+        heading: 'Nếu cần dùng app liên tục trên đường, gói liên vùng càng đáng giá',
+        paragraphs: [
+          'Khách đi nhiều chặng thường không chỉ cần có mạng, mà cần mạng có ngay lúc vừa qua biên, vừa xuống tàu hoặc vừa gọi xe. Trong tình huống đó, việc không phải đổi gói giữa chuyến có giá trị thực tế rất lớn.',
+          'Nếu hành trình của bạn còn cần Google Maps, Gmail, TikTok hoặc các app phổ biến dùng ổn định, nên ưu tiên gói liên vùng đã được ghi mô tả rõ và dễ nhìn ngay từ trang bán hàng.',
+        ],
+      },
+    ],
+  },
+  {
+    slug: 'dang-ky-tour-son-hang-travel-nhan-uu-dai-esim',
+    title: 'Đăng ký tour cùng Sơn Hằng Travel, nhận ưu đãi eSIM như thế nào?',
+    description:
+      'Giải thích rõ cách ưu đãi eSIM được áp dụng cho khách đăng ký tour cùng Sơn Hằng Travel và khi nào nên nhận gói tặng, khi nào nên nâng cấp thêm data.',
+    excerpt:
+      'Nếu đi theo tour, cách chọn eSIM sẽ khác một chút so với khách đi tự túc. Quan trọng nhất là biết mình được tặng gì, có đủ dùng không và khi nào nên nâng cấp thêm.',
+    updatedAt: '2026-04-09',
+    updatedLabel: '09/04/2026',
+    readingTime: '5 phút đọc',
+    sections: [
+      {
+        heading: 'Khách đi tour thường cần một phương án gọn, không phải tự mò lại từ đầu',
+        paragraphs: [
+          'Với khách đi tour, điều quan trọng không chỉ là có mạng. Họ cần một phương án đủ rõ để trước ngày khởi hành không phải ngồi so lại từng gói, từng số ngày và từng mức dung lượng một lần nữa.',
+          'Vì vậy cách làm hợp lý là gắn luôn ưu đãi eSIM vào chương trình tour. Khi đó khách hiểu ngay mình được hỗ trợ ở mức nào, có cần mua thêm hay chỉ cần nhận QR và cài trước chuyến đi.',
+        ],
+      },
+      {
+        heading: 'Ưu đãi nên được hiểu là điểm cộng cho hành trình, không phải lời hứa chung chung',
+        paragraphs: [
+          'Có tour chỉ cần một mức data cơ bản để khách dùng maps, liên hệ và nhận thông tin đoàn. Có tour dài ngày hơn hoặc lịch trình di chuyển dày hơn thì mức tặng ban đầu có thể chưa đủ cho nhu cầu phát sinh thực tế.',
+          'Nói rõ ngay từ đầu sẽ tốt hơn: khách được tặng eSIM hoặc được ưu đãi data theo chương trình phù hợp của từng hành trình. Nếu cần nhiều hơn, vẫn có thể chọn nâng cấp gói ngay trên website cho đúng cách dùng của mình.',
+        ],
+        bullets: [
+          'Đi tour ngắn và dùng cơ bản: gói tặng thường đã đủ',
+          'Đi dài ngày hoặc dùng nhiều app: nên xem thêm gói nâng cấp',
+          'Muốn chủ động hơn: cài QR trước chuyến đi để tới nơi dùng luôn',
+        ],
+      },
+      {
+        heading: 'Cách kết hợp hợp lý nhất là để tour và eSIM bổ trợ cho nhau',
+        paragraphs: [
+          'Sơn Hằng Travel lo phần lịch trình, vé và trải nghiệm chuyến đi. eSIM CN lo phần kết nối để khách tới nơi có thể dùng mạng ngay cho bản đồ, liên lạc và các ứng dụng cần thiết. Hai phần này đi cùng nhau sẽ tạo cảm giác dịch vụ liền mạch hơn nhiều.',
+          'Nếu đưa thông điệp này lên rõ trên website, khách sẽ dễ hiểu đây không phải hai bên rời nhau, mà là một hệ hỗ trợ chung cho cả hành trình.',
         ],
       },
     ],

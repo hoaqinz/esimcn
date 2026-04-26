@@ -64,19 +64,47 @@ Public runtime values can stay in `wrangler.toml` under `[vars]`, for example:
 - `PAYMENT_ACCOUNT_NAME`
 - `PAYMENT_NOTIFY_FROM`
 - `PAYMENT_NOTIFY_REPLY_TO`
-- `PAYMENT_NOTIFY_BCC`
 
 Sensitive values should not be committed to `wrangler.toml`. Set them as Worker secrets instead:
 
 ```bash
 wrangler secret put PAYMENT_WEBHOOK_SECRET
+wrangler secret put PAYMENT_FORWARD_NTA_SECRET
 wrangler secret put RESEND_API_KEY
 wrangler secret put ESIM_ACCESS_CODE
 wrangler secret put ESIM_ACCESS_SECRET
 wrangler secret put ADMIN_PASSWORD
 ```
 
+Operational-only values such as `PAYMENT_NOTIFY_BCC` are better stored as secrets too, even if they are not cryptographic secrets:
+
+```bash
+wrangler secret put PAYMENT_NOTIFY_BCC
+```
+
 If you want a non-default admin username, set `ADMIN_USERNAME` in `.dev.vars` locally and in Cloudflare runtime config for production.
+
+## Single webhook for multiple sites
+
+If your bank API only supports one webhook URL, keep the bank pointed at this Worker:
+
+- `https://esimcn-net.sonhangtravel.workers.dev/api/payment-webhook`
+
+This project now supports forwarding `NTA / ESIMNTA` payments to a second site.
+
+Required runtime config for web2 forwarding:
+
+- `PAYMENT_FORWARD_NTA_URL`
+- `PAYMENT_FORWARD_NTA_SECRET`
+
+Recommended code prefixes:
+
+- `esimcn`: `ECN-XXXXXXXX` and `ESIMCN########`
+- `web2`: `NTA-XXXXXXXX` and `ESIMNTA########`
+
+The receiver kit for web2 lives in:
+
+- `output/web2-payment-webhook-kit`
 
 ## Deploy to Cloudflare
 
@@ -90,6 +118,8 @@ Then in Cloudflare:
 2. Add the custom domain or route for the apex domain and `www`.
 3. Verify `https://esimcn.net/sitemap.xml` is reachable.
 4. Submit the sitemap in Search Console.
+
+At the moment the repo deploys cleanly to `workers.dev`. If you want custom-domain routing to be fully codified in git, add the production `routes` or `custom_domain` entries to `wrangler.toml` after confirming the exact zone and route pattern in the target Cloudflare account.
 
 ## SEO notes
 

@@ -15,6 +15,17 @@ type RenderContext = {
   siteUrl: string;
   supportEmail: string;
   primaryKeyword: string;
+  siteName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  homeHeroTitle: string;
+  homeHeroDescription: string;
+  homeHeroBannerUrl: string;
+  homeHeroBannerGalleryUrls: string;
+  footerDescription: string;
+  homeMetaTitle: string;
+  homeMetaDescription: string;
+  socialImageUrl: string;
 };
 
 type HomePageOptions = {
@@ -106,6 +117,21 @@ type AdminPerformanceCard = {
   tone: 'accent' | 'neutral' | 'muted';
 };
 
+type AdminSiteSettings = {
+  siteName: string;
+  supportEmail: string;
+  logoUrl: string;
+  faviconUrl: string;
+  homeHeroTitle: string;
+  homeHeroDescription: string;
+  homeHeroBannerUrl: string;
+  homeHeroBannerGalleryUrls: string;
+  footerDescription: string;
+  homeMetaTitle: string;
+  homeMetaDescription: string;
+  socialImageUrl: string;
+};
+
 type AdminDashboardPageData = {
   username: string;
   csrfToken: string;
@@ -121,15 +147,13 @@ type AdminDashboardPageData = {
   customers: AdminCustomerItem[];
   orders: AdminOrderItem[];
   webhookEvents: AdminWebhookItem[];
+  siteSettings: AdminSiteSettings;
+  assetUploadEnabled: boolean;
+  assetUploadMode: 'disabled' | 'd1' | 'r2';
+  assetUploadLimitLabel: string;
   flash?: AdminFlash | null;
   previewHref: string;
   apiHref: string;
-};
-
-type PaymentBankApp = {
-  appId: string;
-  label: string;
-  autofill: boolean;
 };
 
 type CustomerPortalOrderItem = {
@@ -180,18 +204,69 @@ const PUBLIC_PLAN_NAME_MAP: Record<string, string> = {
   CN_20_30_nonhkip: '20GB / 30 Days',
   CN_50_30_nonhkip: '50GB / 30 Days',
 };
-const DAY_PASS_DISCOUNT_TIERS = [
-  { min: 30, max: 365, rate: 0.18, label: 'Giảm 18%' },
-  { min: 20, max: 29, rate: 0.15, label: 'Giảm 15%' },
-  { min: 10, max: 19, rate: 0.11, label: 'Giảm 11%' },
-  { min: 5, max: 9, rate: 0.08, label: 'Giảm 8%' },
-  { min: 1, max: 4, rate: 0.04, label: 'Giảm 4%' },
-] as const;
-
 const formatVndFromUsd = (amountUsd: number) =>
   `${moneyVnd.format(Math.max(0, Math.round((amountUsd * USD_TO_VND) / 1000) * 1000))}đ`;
 
 const formatVndAmount = (amountVnd: number) => `${moneyVnd.format(Math.max(0, Math.round(amountVnd / 1000) * 1000))}đ`;
+const resolveAssetUrl = (context: RenderContext, value: string | null | undefined, fallback = '') => {
+  const raw = (value || fallback || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw, context.siteUrl).toString();
+  } catch {
+    return raw;
+  }
+};
+const parseAssetUrlList = (value: string | null | undefined) =>
+  String(value || '')
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+const getHomeHeroBannerUrls = (context: RenderContext) => {
+  const urls = [
+    context.homeHeroBannerUrl,
+    ...parseAssetUrlList(context.homeHeroBannerGalleryUrls),
+  ]
+    .map((value) => resolveAssetUrl(context, value))
+    .filter(Boolean);
+
+  return [...new Set(urls)];
+};
+const toBackgroundImageStyle = (context: RenderContext, value: string | null | undefined) => {
+  const assetUrl = resolveAssetUrl(context, value);
+  if (!assetUrl) return '';
+  return ` style="background-image:url('${escapeHtml(encodeURI(assetUrl).replaceAll("'", '%27'))}')"`;
+};
+const toBackgroundImageVarStyle = (context: RenderContext, value: string | null | undefined, varName: string) => {
+  const assetUrl = resolveAssetUrl(context, value);
+  if (!assetUrl) return '';
+  return ` style="${escapeHtml(varName)}:url('${escapeHtml(encodeURI(assetUrl).replaceAll("'", '%27'))}')"`;
+};
+const hasCustomLogo = (context: RenderContext) => Boolean(resolveAssetUrl(context, context.logoUrl));
+const renderBrandMark = (context: RenderContext, mode: 'default' | 'footer' = 'default') => {
+  const logoUrl = resolveAssetUrl(context, context.logoUrl);
+  if (!logoUrl) {
+    return mode === 'footer' ? '' : '<span class="brand-mark">e</span>';
+  }
+
+  return `<img class="brand-mark-image brand-mark-plain" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(context.siteName)}" loading="eager" decoding="async" />`;
+};
+const renderRoseBrandMark = (context: RenderContext) => {
+  const logoUrl = resolveAssetUrl(context, context.logoUrl);
+  if (!logoUrl) {
+    return renderMobileIcon('sim');
+  }
+
+  return `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(context.siteName)}" loading="eager" decoding="async" />`;
+};
+const renderMobileBrandImage = (context: RenderContext, className: string) => {
+  const logoUrl = resolveAssetUrl(context, context.logoUrl);
+  if (!logoUrl) {
+    return '';
+  }
+
+  return `<img class="${escapeHtml(className)}" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(context.siteName)}" loading="eager" decoding="async" />`;
+};
 const parseVndLabelToAmount = (value: string | null | undefined) => {
   if (!value) return null;
   const digits = value.replace(/[^\d]/g, '');
@@ -218,7 +293,7 @@ const formatDateTimeLabel = (value: string | null | undefined) =>
     : '';
 const getSourcePlanPriceUsd = (plan: Plan) => plan.sourcePriceUsd ?? plan.priceUsd;
 
-const STYLE_VERSION = '20260404-01';
+const STYLE_VERSION = '20260424-04';
 
 const getMobileDaySliderProgress = (days: number, maxDays = DAY_PASS_MAX_DAYS) => {
   const safeDays = Math.max(1, Math.min(maxDays, Math.round(days)));
@@ -352,6 +427,7 @@ const renderMobileIcon = (
 };
 
 const fullUrl = (siteUrl: string, path: string) => new URL(path, siteUrl).toString();
+const SOCIAL_IMAGE_PATH = '/og/home.jpg';
 
 const getPlanPublicHandle = (plan: Plan) => {
   const bits = ['trung quoc', plan.dataAllowance.replace('/ngày', ' moi ngay').replace('/', ' ')];
@@ -384,6 +460,17 @@ const getDayPassSummaryName = (
   }
   return `${baseData} / ${safeDays} ngày / Unlimited không bị cắt mạng`;
 };
+const getDayPassCompactName = (
+  planLike?: { dataAllowance?: string | null; data?: string | null; periodRequired?: boolean | null } | null,
+  days?: number | null,
+) => {
+  const safeDays = Math.max(1, Math.round(Number(days ?? 1) || 1));
+  const baseData = getDayPassBaseDataLabel(planLike);
+  if (!baseData) {
+    return `${safeDays} ngày`;
+  }
+  return `${baseData} / ${safeDays} ngày`;
+};
 
 const buildPurchasePath = (planRef?: Plan | string | null, periodNum?: number | null, quantity?: number | null) => {
   const params = new URLSearchParams();
@@ -412,42 +499,6 @@ const withAccessToken = (path: string, accessToken?: string) => {
 const buildPaymentSuccessPath = (reference: string, accessToken?: string) =>
   withAccessToken(`/thanh-toan-thanh-cong/${reference}`, accessToken);
 const buildPaymentPath = (reference: string, accessToken?: string) => withAccessToken(`/thanh-toan/${reference}`, accessToken);
-const PAYMENT_BANK_APPS: PaymentBankApp[] = [
-  { appId: 'mb', label: 'MB Bank', autofill: false },
-  { appId: 'vcb', label: 'Vietcombank', autofill: false },
-  { appId: 'bidv', label: 'BIDV', autofill: true },
-  { appId: 'tcb', label: 'Techcombank', autofill: false },
-  { appId: 'vpb', label: 'VPBank', autofill: false },
-  { appId: 'acb', label: 'ACB One', autofill: true },
-  { appId: 'icb', label: 'VietinBank', autofill: true },
-  { appId: 'vba', label: 'Agribank', autofill: false },
-  { appId: 'ocb', label: 'OCB', autofill: true },
-  { appId: 'tpb', label: 'TPBank', autofill: false },
-  { appId: 'hdb', label: 'HDBank', autofill: false },
-  { appId: 'vib-2', label: 'MyVIB', autofill: false },
-  { appId: 'shb', label: 'SHB', autofill: false },
-  { appId: 'lpb', label: 'LPBank', autofill: false },
-  { appId: 'seab', label: 'SeABank', autofill: false },
-  { appId: 'cake', label: 'Cake', autofill: false },
-  { appId: 'nab', label: 'Nam A Bank', autofill: false },
-  { appId: 'abb', label: 'ABBank', autofill: false },
-  { appId: 'eib', label: 'Eximbank', autofill: false },
-  { appId: 'pvcb', label: 'PVcomBank', autofill: false },
-  { appId: 'cimb', label: 'CIMB', autofill: false },
-  { appId: 'ncb', label: 'NCB', autofill: false },
-  { appId: 'shbvn', label: 'Shinhan', autofill: false },
-  { appId: 'vib', label: 'MyVIB Classic', autofill: false },
-  { appId: 'timo', label: 'Timo', autofill: false },
-  { appId: 'wvn', label: 'Woori', autofill: false },
-  { appId: 'klb', label: 'KienlongBank', autofill: false },
-  { appId: 'bvb', label: 'BaoViet Bank', autofill: false },
-  { appId: 'vab', label: 'VietABank', autofill: false },
-  { appId: 'tpb-pay', label: 'TPBank QuickPay', autofill: false },
-  { appId: 'coopbank', label: 'Co-opBank', autofill: false },
-  { appId: 'oceanbank', label: 'OceanBank', autofill: false },
-  { appId: 'pbvn', label: 'Public Bank', autofill: false },
-  { appId: 'sgicb', label: 'Saigonbank', autofill: false },
-];
 const getVisiblePlans = (planList: Plan[]) => planList.filter((plan) => !plan.hiddenFromCatalog);
 const getManagedPublicPlans = (planList: Plan[]) =>
   PUBLIC_CATALOG_PLAN_SLUGS.map((slug) => planList.find((plan) => plan.slug === slug)).filter((plan): plan is Plan => plan != null);
@@ -455,26 +506,6 @@ const buildAppleEsimInstallUrl = (activationCode: string) =>
   `https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(activationCode)}`;
 const buildAndroidEsimInstallUrl = (activationCode: string) =>
   `https://esimsetup.android.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(activationCode)}`;
-
-const buildBankAppPaymentLink = (
-  appId: string,
-  payment: {
-    bankCode: string;
-    accountNumber: string;
-    accountName: string;
-    amountVnd: number;
-    paymentCode: string;
-  },
-) => {
-  const params = new URLSearchParams({
-    app: appId,
-    ba: `${payment.accountNumber}@${payment.bankCode.toLowerCase()}`,
-    am: String(payment.amountVnd),
-    tn: payment.paymentCode,
-    bn: payment.accountName,
-  });
-  return `https://dl.vietqr.io/pay?${params.toString()}`;
-};
 
 const buildDemoEsimQrSrc = (reference: string) => {
   const size = 21;
@@ -945,11 +976,6 @@ const pageScript = `
   };
 
   const getDayPassDiscount = (days) => {
-    if (days >= 30) return { rate: 0.18, label: 'Giảm 18%' };
-    if (days >= 20) return { rate: 0.15, label: 'Giảm 15%' };
-    if (days >= 10) return { rate: 0.11, label: 'Giảm 11%' };
-    if (days >= 5) return { rate: 0.08, label: 'Giảm 8%' };
-    if (days >= 1) return { rate: 0.04, label: 'Giảm 4%' };
     return { rate: 0, label: 'Chưa giảm giá' };
   };
 
@@ -1470,7 +1496,12 @@ const pageScript = `
     syncTopupBadge(selectedTopup, Boolean(primarySource.topup || dimensionSource?.topup));
     syncText(selectedDataStats, dimensionSource?.data || '');
     syncText(selectedDayStats, displayQuote?.days ? displayQuote.days + ' ngày' : dimensionSource?.days || '');
-    applyCheckoutUrl(primarySource.slug || slug, primarySource.periodRequired ? periodValue : null, undefined, primarySource.handle || '');
+    applyCheckoutUrl(
+      primarySource.slug || slug,
+      primarySource.periodRequired ? periodValue : null,
+      getCurrentQuantity(),
+      primarySource.handle || '',
+    );
   };
 
   const syncPlanMeta = () => {
@@ -1487,7 +1518,12 @@ const pageScript = `
     if (periodInput) {
       periodInput.required = needsPeriod && !isHiddenPeriodInput;
       if (needsPeriod && !periodInput.value) {
-        periodInput.value = periodFromUrl || mobileDayRange?.value || '1';
+        const periodFromQuery = Number.parseInt(periodFromUrl, 10);
+        const fallbackPeriod =
+          Number.isFinite(periodFromQuery) && periodFromQuery > 0
+            ? periodFromQuery
+            : getCurrentMobileDayValue(getCurrentMobileType());
+        periodInput.value = String(Math.max(1, Math.min(365, fallbackPeriod)));
       }
       if (!needsPeriod) {
         periodInput.value = '';
@@ -1844,6 +1880,7 @@ const pageScript = `
     if (desktopQuantityInput instanceof HTMLInputElement) {
       desktopQuantityInput.addEventListener('input', () => {
         syncDesktopQuantity(desktopQuantityInput.value);
+        syncDesktopPicker({ type: getCurrentDesktopType() });
       });
     }
     desktopQuantityButtons.forEach((node) => {
@@ -1851,6 +1888,7 @@ const pageScript = `
         const step = Number.parseInt(node.getAttribute('data-desktop-quantity-step') || '0', 10) || 0;
         const currentValue = desktopQuantityInput instanceof HTMLInputElement ? desktopQuantityInput.value : orderQuantityInput?.value || '1';
         syncDesktopQuantity((Number.parseInt(currentValue, 10) || 1) + step);
+        syncDesktopPicker({ type: getCurrentDesktopType() });
       });
     });
     if (desktopDaysInput instanceof HTMLInputElement) {
@@ -1904,8 +1942,11 @@ const pageScript = `
     if (!(node instanceof HTMLElement)) return;
     const card = node.closest('.rose-plan-card');
     const quantityInput = card?.querySelector('[data-plan-quantity-input]');
+    const periodInputNode = card?.querySelector('[data-plan-period-input]');
     const priceDisplay = card?.querySelector('[data-plan-price-display]');
+    const priceLabel = card?.querySelector('[data-plan-price-label]');
     const quantityButtons = Array.from(card?.querySelectorAll('[data-plan-quantity-step]') ?? []);
+    const periodButtons = Array.from(card?.querySelectorAll('[data-plan-period-step]') ?? []);
     const slug = node.getAttribute('data-plan-slug') || '';
     const label = node.getAttribute('data-plan-name') || slug;
     const unitPriceText =
@@ -1923,8 +1964,37 @@ const pageScript = `
       return safeValue;
     };
 
+    const syncPlanCardPeriod = (value) => {
+      const safeValue = Math.max(1, Math.min(365, Number.parseInt(String(value || '1'), 10) || 1));
+      if (periodInputNode instanceof HTMLInputElement) {
+        periodInputNode.value = String(safeValue);
+      }
+      return safeValue;
+    };
+
+    const syncPlanCardPricing = () => {
+      const safeQuantity = syncPlanCardQuantity(quantityInput instanceof HTMLInputElement ? quantityInput.value : '1');
+      const safePeriod = syncPlanCardPeriod(periodInputNode instanceof HTMLInputElement ? periodInputNode.value : '1');
+      if (priceDisplay instanceof HTMLElement && unitPriceText) {
+        const baseAmount = parseVnd(unitPriceText);
+        if (baseAmount > 0) {
+          priceDisplay.textContent = formatVnd(baseAmount * safeQuantity * safePeriod);
+        } else {
+          priceDisplay.textContent = unitPriceText;
+        }
+      }
+      if (priceLabel instanceof HTMLElement) {
+        priceLabel.textContent = safeQuantity > 1 || safePeriod > 1 ? 'Tạm tính' : 'Giá 1 ngày';
+      }
+      return { safeQuantity, safePeriod };
+    };
+
     if (quantityInput instanceof HTMLInputElement) {
-      quantityInput.addEventListener('input', () => syncPlanCardQuantity(quantityInput.value));
+      quantityInput.addEventListener('input', () => syncPlanCardPricing());
+    }
+
+    if (periodInputNode instanceof HTMLInputElement) {
+      periodInputNode.addEventListener('input', () => syncPlanCardPricing());
     }
 
     quantityButtons.forEach((button) => {
@@ -1932,16 +2002,26 @@ const pageScript = `
         const step = Number.parseInt(button.getAttribute('data-plan-quantity-step') || '0', 10) || 0;
         const currentValue = quantityInput instanceof HTMLInputElement ? quantityInput.value : '1';
         syncPlanCardQuantity((Number.parseInt(currentValue, 10) || 1) + step);
+        syncPlanCardPricing();
+      });
+    });
+
+    periodButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const step = Number.parseInt(button.getAttribute('data-plan-period-step') || '0', 10) || 0;
+        const currentValue = periodInputNode instanceof HTMLInputElement ? periodInputNode.value : '1';
+        syncPlanCardPeriod((Number.parseInt(currentValue, 10) || 1) + step);
+        syncPlanCardPricing();
       });
     });
 
     node.addEventListener('click', () => {
-      const safeQuantity = syncPlanCardQuantity(quantityInput instanceof HTMLInputElement ? quantityInput.value : '1');
+      const { safeQuantity, safePeriod } = syncPlanCardPricing();
       const matchingPlan = mobilePlans.find((plan) => plan.slug === slug) ?? null;
       const option =
         planSelect instanceof HTMLSelectElement ? Array.from(planSelect.options).find((item) => item.value === slug) : null;
       const needsPeriod = option?.dataset.periodRequired === 'true' || matchingPlan?.type === 'reset';
-      const directHref = buildCheckoutUrl(slug, needsPeriod ? 1 : null, safeQuantity, matchingPlan?.handle || '');
+      const directHref = buildCheckoutUrl(slug, needsPeriod ? safePeriod : null, safeQuantity, matchingPlan?.handle || '');
 
       if (!(planSelect instanceof HTMLSelectElement)) {
         window.location.href = directHref;
@@ -1950,7 +2030,7 @@ const pageScript = `
 
       syncDesktopQuantity(safeQuantity);
       setPlan(slug, label, {
-        periodNum: needsPeriod ? 1 : undefined,
+        periodNum: needsPeriod ? safePeriod : undefined,
       });
 
       if (status instanceof HTMLElement) {
@@ -1960,7 +2040,7 @@ const pageScript = `
       focusQuickOrder();
     });
 
-    syncPlanCardQuantity(quantityInput instanceof HTMLInputElement ? quantityInput.value : '1');
+    syncPlanCardPricing();
   });
 
   const copyButtons = Array.from(document.querySelectorAll('[data-copy-button]'));
@@ -2838,11 +2918,6 @@ const legacyMobilePickerScript = `
     }
 
     function getDiscount(days) {
-      if (days >= 30) return 0.18;
-      if (days >= 20) return 0.15;
-      if (days >= 10) return 0.11;
-      if (days >= 5) return 0.08;
-      if (days >= 1) return 0.04;
       return 0;
     }
 
@@ -3210,11 +3285,6 @@ const legacyHomeSupportScript = `
     }
 
     function getDiscount(days) {
-      if (days >= 30) return 0.18;
-      if (days >= 20) return 0.15;
-      if (days >= 10) return 0.11;
-      if (days >= 5) return 0.08;
-      if (days >= 1) return 0.04;
       return 0;
     }
 
@@ -3593,6 +3663,7 @@ const layout = ({
   context,
   robots,
   structuredData,
+  headScripts,
 }: {
   title: string;
   description: string;
@@ -3602,13 +3673,81 @@ const layout = ({
   context: RenderContext;
   robots?: string;
   structuredData?: unknown[];
+  headScripts?: string;
 }) => {
   const canonical = fullUrl(context.siteUrl, pathname);
+  const socialImageUrl = resolveAssetUrl(context, context.socialImageUrl, SOCIAL_IMAGE_PATH);
+  const faviconUrl = resolveAssetUrl(context, context.faviconUrl, '/favicon.svg');
   const schemas = structuredData?.map(jsonLd).join('\n') ?? '';
+  const googleTagCore = pathname.startsWith('/admin')
+    ? ''
+    : `
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-50NZZS9M2N"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-50NZZS9M2N');
+    </script>`;
+  const googleAdsTag = pathname.startsWith('/admin')
+    ? ''
+    : `
+    <script>
+      gtag('config', 'AW-16954338776');
+
+      document.addEventListener('click', function (event) {
+        var target = event.target instanceof Element ? event.target.closest('a[href]') : null;
+        if (!(target instanceof HTMLAnchorElement)) return;
+        var href = target.getAttribute('href') || '';
+        if (!href || href.charAt(0) === '#' || href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0 || href.indexOf('javascript:') === 0) {
+          return;
+        }
+
+        var url;
+        try {
+          url = new URL(target.href, window.location.href);
+        } catch (_error) {
+          return;
+        }
+
+        if (url.origin === window.location.origin) {
+          return;
+        }
+
+        var opensNewTab = target.target === '_blank' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+        if (opensNewTab) {
+          gtag('event', 'conversion', {
+            'send_to': 'AW-16954338776/J2hgCInnw5ccENjbupQ_',
+            'value': 1.0,
+            'currency': 'VND'
+          });
+          return;
+        }
+
+        event.preventDefault();
+        var navigated = false;
+        var navigate = function () {
+          if (navigated) return;
+          navigated = true;
+          window.location.href = target.href;
+        };
+
+        gtag('event', 'conversion', {
+          'send_to': 'AW-16954338776/J2hgCInnw5ccENjbupQ_',
+          'value': 1.0,
+          'currency': 'VND',
+          'event_callback': navigate
+        });
+
+        window.setTimeout(navigate, 800);
+      }, true);
+    </script>`;
+  const siteChatTag = pathname.startsWith('/admin') ? '' : `<script src="/chat-widget.js?v=${STYLE_VERSION}" defer></script>`;
 
   return `<!doctype html>
 <html lang="vi">
   <head>
+    ${googleTagCore}
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(title)}</title>
@@ -3616,25 +3755,31 @@ const layout = ({
     <meta name="robots" content="${escapeHtml(robots ?? 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1')}" />
     <meta name="theme-color" content="#b42318" />
     <link rel="canonical" href="${canonical}" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="${escapeHtml(faviconUrl)}" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="/styles.css?v=${STYLE_VERSION}" />
     <meta property="og:locale" content="vi_VN" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="${brand.name}" />
+    <meta property="og:site_name" content="${escapeHtml(context.siteName)}" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${canonical}" />
+    <meta property="og:image" content="${socialImageUrl}" />
+    <meta property="og:image:alt" content="${escapeHtml(title)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${socialImageUrl}" />
     ${schemas}
+    ${googleAdsTag}
+    ${headScripts ?? ''}
   </head>
   <body${bodyClass ? ` class="${bodyClass}"` : ''}>
     <div class="page-shell">
       ${body}
     </div>
+    ${siteChatTag}
     <script>${pageScript}</script>
   </body>
 </html>`;
@@ -3649,12 +3794,14 @@ const header = (
 ) => `
 <header class="site-header">
   <div class="header-inner">
-    <a href="/" class="brand" aria-label="${brand.name}">
-      <span class="brand-mark">e</span>
-      <span class="brand-copy">
-        <strong>${brand.name}</strong>
+    <a href="/" class="brand${hasCustomLogo(context) ? ' brand-logo-only' : ''}" aria-label="${escapeHtml(context.siteName)}">
+      ${renderBrandMark(context)}
+      ${hasCustomLogo(context)
+        ? ''
+        : `<span class="brand-copy">
+        <strong>${escapeHtml(context.siteName)}</strong>
         <span>${brand.domain}</span>
-      </span>
+      </span>`}
     </a>
     <nav class="header-nav" aria-label="Điều hướng chính">
       <a href="/#packages">Các gói</a>
@@ -3673,17 +3820,21 @@ const header = (
 const footer = (context: RenderContext) => `
 <footer class="site-footer">
   <div class="wrap footer-inner">
-    <div>
-      <strong>${brand.name}</strong>
-      <p>Bán eSIM Trung Quốc, Hong Kong và Macau bằng tiếng Việt, nhận QR nhanh qua email.</p>
+    <div class="footer-brand">
+      <strong>${escapeHtml(context.siteName)}</strong>
+      <p>${escapeHtml(context.footerDescription)}</p>
     </div>
-    <div class="footer-links">
-      <a href="/#packages">Các gói</a>
-      <a href="/#reviews">Đánh giá</a>
-      <a href="/#devices">Thiết bị</a>
-      <a href="/#how">Cách dùng</a>
-      <a href="/tra-cuu-don">Đơn của tôi</a>
-      <a href="mailto:${context.supportEmail}">${context.supportEmail}</a>
+    <div class="footer-meta">
+      <nav class="footer-links" aria-label="Liên kết footer">
+        <a href="/#packages">Các gói</a>
+        <a href="/#reviews">Đánh giá</a>
+        <a href="/#devices">Thiết bị</a>
+        <a href="/#how">Cách dùng</a>
+      </nav>
+      <div class="footer-contact">
+        <a href="/tra-cuu-don">Đơn của tôi</a>
+        <a href="mailto:${context.supportEmail}">${context.supportEmail}</a>
+      </div>
     </div>
   </div>
 </footer>
@@ -4127,7 +4278,7 @@ const getHomeShowcaseTag = (plan: Plan) => {
 
   return 'Trọn gói';
 };
-const getFeaturedPlanCardName = (plan: Plan) => (isUnlimitedDayPlan(plan) ? getDayPassSummaryName(plan, 1) : getPublicPlanName(plan));
+const getFeaturedPlanCardName = (plan: Plan) => (isUnlimitedDayPlan(plan) ? getDayPassCompactName(plan, 1) : getPublicPlanName(plan));
 const getFeaturedPlanPriceLabel = (plan: Plan) => (isUnlimitedDayPlan(plan) ? 'Giá 1 ngày' : 'Giá trọn gói');
 
 const getPlanInternetNote = (plan: Plan) => {
@@ -4150,8 +4301,7 @@ const getPlanOperationalNote = (plan: Plan) => {
   return 'QR gửi qua email';
 };
 
-const getDayPassDiscount = (days: number) =>
-  DAY_PASS_DISCOUNT_TIERS.find((tier) => days >= tier.min && days <= tier.max) ?? { rate: 0, label: 'Chưa giảm giá' };
+const getDayPassDiscount = (_days: number) => ({ rate: 0, label: 'Chưa giảm giá' });
 
 const getDayPassTotalUsd = (plan: Plan, days: number) => {
   const safeDays = Math.max(1, Math.min(DAY_PASS_MAX_DAYS, Math.round(days)));
@@ -4958,6 +5108,15 @@ const getDayPassPickerPlans = (planList: Plan[]) =>
 
 export const renderHomePage = (context: RenderContext, planList: Plan[] = plans, options: HomePageOptions = {}) => {
   const visiblePlans = getVisiblePlans(planList);
+  const heroBannerImageUrls = getHomeHeroBannerUrls(context);
+  const mobileBannerImageUrl = heroBannerImageUrls[0] ?? '';
+  const renderHeroBannerImages = (className: string) =>
+    heroBannerImageUrls
+      .map(
+        (url, index) =>
+          `<img class="${className}${index === 0 ? ' is-active' : ''}" data-hero-banner-slide src="${escapeHtml(url)}" alt="${escapeHtml(context.homeHeroTitle)}${heroBannerImageUrls.length > 1 ? ` ${index + 1}` : ''}" loading="${index === 0 ? 'eager' : 'lazy'}" decoding="async" />`,
+      )
+      .join('');
   const ownPlans = getManagedPublicPlans(visiblePlans);
   const publicPlans = ownPlans.length > 0 ? ownPlans : visiblePlans;
   const totalPlans = new Intl.NumberFormat('vi-VN').format(publicPlans.length);
@@ -5172,9 +5331,17 @@ export const renderHomePage = (context: RenderContext, planList: Plan[] = plans,
     {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: brand.name,
+      name: context.siteName,
       url: context.siteUrl,
       email: context.supportEmail,
+      logo: resolveAssetUrl(context, context.logoUrl, context.faviconUrl || '/favicon.svg'),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: context.siteName,
+      url: context.siteUrl,
+      inLanguage: 'vi-VN',
     },
     {
       '@context': 'https://schema.org',
@@ -5216,27 +5383,55 @@ ${header(context)}
 <main class="detail-home">
   <section class="mobile-app-shell reveal">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand mobile-app-brand-wordmark" href="/">
-        <span class="mobile-app-brand-copy">
+      <a class="mobile-app-brand${hasCustomLogo(context) ? ' mobile-app-brand-logo-only' : ' mobile-app-brand-wordmark'}" href="/" aria-label="${escapeHtml(context.siteName)}">
+        ${hasCustomLogo(context)
+          ? renderMobileBrandImage(context, 'mobile-app-brand-image')
+          : `<span class="mobile-app-brand-copy">
           <strong>eSIM</strong>
           <small>CHINA</small>
-        </span>
+        </span>`}
       </a>
       <a class="mobile-app-control" href="/tra-cuu-don" aria-label="Mở lại đơn đã mua">Đơn của tôi</a>
     </div>
 
-    <article class="mobile-app-banner">
-      <span class="mobile-app-banner-flag">🇨🇳</span>
-      <div class="mobile-app-banner-copy">
-        <h2>eSIM Trung Quốc cài nhanh, dùng ngay</h2>
-        <p>Nhận QR qua email sau thanh toán. Không cần SIM vật lý.</p>
-        <a class="mobile-app-banner-cta" href="#mobile-picker">
-          <span class="mobile-app-banner-cta-icon">${renderMobileIcon('spark')}</span>
-          <span>Xem gói</span>
-          <span class="mobile-app-banner-cta-arrow">${renderMobileIcon('arrow-right')}</span>
-        </a>
-      </div>
+    <article class="mobile-app-banner" aria-label="${escapeHtml(context.homeHeroTitle)}">
+      ${
+        mobileBannerImageUrl
+          ? heroBannerImageUrls.length > 1
+            ? `<div class="mobile-app-banner-gallery" data-hero-banner-gallery>${renderHeroBannerImages('mobile-app-banner-image')}</div>`
+            : `<img class="mobile-app-banner-image" src="${escapeHtml(mobileBannerImageUrl)}" alt="${escapeHtml(context.homeHeroTitle)}" loading="eager" decoding="async" />`
+          : ''
+      }
     </article>
+    ${
+      heroBannerImageUrls.length > 1
+        ? `<script>
+      (() => {
+        const initHeroGalleries = () => {
+          const galleries = document.querySelectorAll('[data-hero-banner-gallery]');
+          galleries.forEach((gallery) => {
+            if (gallery.getAttribute('data-hero-banner-ready') === 'true') return;
+            const slides = Array.from(gallery.querySelectorAll('[data-hero-banner-slide]'));
+            if (slides.length <= 1) return;
+            gallery.setAttribute('data-hero-banner-ready', 'true');
+            let index = Math.max(0, slides.findIndex((slide) => slide.classList.contains('is-active')));
+            slides.forEach((slide, slideIndex) => slide.classList.toggle('is-active', slideIndex === index));
+            window.setInterval(() => {
+              slides[index].classList.remove('is-active');
+              index = (index + 1) % slides.length;
+              slides[index].classList.add('is-active');
+            }, 4000);
+          });
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initHeroGalleries);
+        } else {
+          initHeroGalleries();
+        }
+      })();
+    </script>`
+        : ''
+    }
 
     <section class="mobile-app-feature-strip">
       ${mobileQuickFeatures
@@ -5436,12 +5631,14 @@ ${header(context)}
   <section class="rose-showcase reveal">
     <div class="wrap rose-shell">
       <header class="rose-homebar">
-        <a href="/" class="rose-brand" aria-label="${brand.name}">
-          <span class="rose-brand-mark">${renderMobileIcon('sim')}</span>
-          <span class="rose-brand-copy">
-            <strong>eSIM China</strong>
+        <a href="/" class="rose-brand${hasCustomLogo(context) ? ' rose-brand-logo-only' : ''}" aria-label="${escapeHtml(context.siteName)}">
+          <span class="rose-brand-mark">${renderRoseBrandMark(context)}</span>
+          ${hasCustomLogo(context)
+            ? ''
+            : `<span class="rose-brand-copy">
+            <strong>${escapeHtml(context.siteName)}</strong>
             <span>Trung Quốc, Hong Kong, Macau</span>
-          </span>
+          </span>`}
         </a>
         <nav class="rose-nav" aria-label="Điều hướng desktop">
           <a href="/">Trang Chủ</a>
@@ -5456,18 +5653,19 @@ ${header(context)}
       </header>
 
       <div
-        class="rose-hero"
+        class="rose-hero${heroBannerImageUrls.length > 1 ? ' rose-hero-gallery' : ''}"
         role="img"
         aria-label="Banner eSIM Trung Quốc"
-      ></div>
+        ${heroBannerImageUrls.length <= 1 ? toBackgroundImageStyle(context, context.homeHeroBannerUrl) : ''}
+      >${heroBannerImageUrls.length > 1 ? `<div class="rose-hero-slides" data-hero-banner-gallery>${renderHeroBannerImages('rose-hero-image')}</div>` : ''}</div>
 
       <section class="rose-picker reveal home-node-shell" id="packages">
         <div class="rose-picker-head">
-          <div>
-            <span class="section-kicker">Chọn gói</span>
-            <h2 class="section-title">Chọn số ngày và dung lượng.</h2>
-          </div>
-          <p class="section-copy">Điều chỉnh các thông số để xem đúng gói và mức giá cần mua.</p>
+        <div>
+          <span class="section-kicker">Chọn gói</span>
+          <h2 class="section-title">${escapeHtml(context.homeHeroTitle)}</h2>
+        </div>
+          <p class="section-copy">${escapeHtml(context.homeHeroDescription)}</p>
         </div>
 
         <section class="desktop-picker-card desktop-picker-card-hero reveal">
@@ -5507,7 +5705,7 @@ ${header(context)}
                   <span>ngày</span>
                 </label>
               </div>
-              <div class="desktop-picker-range-shell" data-desktop-range-shell>
+              <div class="desktop-picker-range-shell" data-desktop-range-shell style="--range-progress: ${defaultMobileDayProgress}%">
                 <span class="desktop-picker-range-track" aria-hidden="true">
                   <span class="desktop-picker-range-fill"></span>
                 </span>
@@ -5543,7 +5741,7 @@ ${header(context)}
                   </select>
                 </label>
               </div>
-              <div class="desktop-picker-range-shell" data-desktop-range-shell>
+              <div class="desktop-picker-range-shell" data-desktop-range-shell style="--range-progress: ${defaultMobileDataProgress}%">
                 <span class="desktop-picker-range-track" aria-hidden="true">
                   <span class="desktop-picker-range-fill"></span>
                 </span>
@@ -5635,19 +5833,33 @@ ${header(context)}
           </div>
           <div class="rose-plan-bottom">
             <div class="rose-plan-price">
-              <span>${escapeHtml(getFeaturedPlanPriceLabel(plan))}</span>
+              <span data-plan-price-label>${escapeHtml(getFeaturedPlanPriceLabel(plan))}</span>
               <b data-plan-price-display data-plan-unit-price="${escapeHtml(plan.priceVnd)}">${escapeHtml(plan.priceVnd)}</b>
               <small>${escapeHtml(isUnlimitedDayPlan(plan) ? getUnlimitedUsageLabel(plan) : getPlanSupportNote(plan))}</small>
             </div>
             <div class="rose-plan-buy-row">
+              <div class="rose-plan-order-row${isUnlimitedDayPlan(plan) ? '' : ' is-single'}">
+                ${
+                  isUnlimitedDayPlan(plan)
+                    ? `<label class="rose-plan-meta-box rose-plan-days-box" aria-label="Chọn số ngày">
+                <span class="rose-plan-meta-box-label">Số ngày</span>
+                <span class="rose-plan-quantity-controls">
+                  <button type="button" class="rose-plan-quantity-step" data-plan-period-step="-1" aria-label="Giảm số ngày">-</button>
+                  <input class="rose-plan-quantity-input" type="number" min="1" max="365" step="1" value="1" inputmode="numeric" data-plan-period-input aria-label="Số ngày" />
+                  <button type="button" class="rose-plan-quantity-step" data-plan-period-step="1" aria-label="Tăng số ngày">+</button>
+                </span>
+              </label>`
+                    : ''
+                }
               <label class="rose-plan-quantity" aria-label="Chọn số lượng">
-                <span class="rose-plan-quantity-label">SL</span>
+                <span class="rose-plan-quantity-label">Số lượng</span>
                 <span class="rose-plan-quantity-controls">
                   <button type="button" class="rose-plan-quantity-step" data-plan-quantity-step="-1" aria-label="Giảm số lượng">-</button>
                   <input class="rose-plan-quantity-input" type="number" min="1" max="99" step="1" value="1" inputmode="numeric" data-plan-quantity-input aria-label="Số lượng" />
                   <button type="button" class="rose-plan-quantity-step" data-plan-quantity-step="1" aria-label="Tăng số lượng">+</button>
                 </span>
               </label>
+              </div>
               <button class="rose-plan-buy" type="button" data-plan-buy-link data-plan-slug="${escapeHtml(plan.slug)}" data-plan-name="${escapeHtml(getFeaturedPlanCardName(plan))}">Mua gói</button>
             </div>
           </div>
@@ -5677,6 +5889,27 @@ ${header(context)}
         </div>
       </div>
 
+    </div>
+  </section>
+
+  <section class="rose-travel-promo-section">
+    <div class="wrap">
+      <article class="rose-travel-promo reveal">
+        <div class="rose-travel-promo-copy">
+          <span class="rose-travel-promo-kicker">Ưu đãi tour</span>
+          <div class="rose-travel-promo-title-stack">
+            <h2 class="rose-travel-promo-title">eSIM CN x Sơn Hằng Travel</h2>
+            <p class="rose-travel-promo-subtitle">eSIM CN đồng hành cùng Sơn Hằng Travel trong những chuyến đi</p>
+          </div>
+          <p class="rose-travel-promo-lead">Khách đăng ký tour từ Sơn Hằng Travel được tặng ưu đãi eSIM data tốc độ cao phù hợp từng hành trình.</p>
+          <p class="rose-travel-promo-note">Liên hệ eSIM CN hoặc Sơn Hằng Travel để biết thông tin ưu đãi.</p>
+        </div>
+        <div class="rose-travel-promo-actions">
+          <span class="rose-travel-promo-tag">Sơn Hằng Travel x eSIM CN</span>
+          <h3 class="rose-travel-promo-side-title">Vi Vu Cùng Sơn Hằng Travel Nhận eSIM Tốc độ cao</h3>
+          <a class="rose-travel-promo-primary" href="https://sonhangtravel.com" target="_blank" rel="noopener noreferrer">Đăng Ký Ngay</a>
+        </div>
+      </article>
     </div>
   </section>
 
@@ -5817,6 +6050,32 @@ ${header(context)}
     </div>
   </section>
 
+  <section class="detail-section" id="guides">
+    <div class="wrap home-node-shell">
+      <div class="detail-section-head">
+        <div>
+          <span class="section-kicker">Hướng dẫn nhanh</span>
+          <h2 class="section-title">Các bài nên đọc trước khi chọn gói.</h2>
+        </div>
+      </div>
+      <div class="article-related-grid">
+        ${articles
+          .slice()
+          .reverse()
+          .slice(0, 6)
+          .map(
+            (item) => `
+        <a class="article-related-card reveal" href="/blog/${item.slug}">
+          <span>${item.readingTime}</span>
+          <strong>${item.title}</strong>
+          <p>${item.excerpt}</p>
+        </a>`,
+          )
+          .join('')}
+      </div>
+    </div>
+  </section>
+
   <div class="mobile-buy-bar">
     <div class="mobile-buy-copy">
       <small>Từ</small>
@@ -5829,9 +6088,8 @@ ${footer(context)}
 `;
 
   return layout({
-    title: 'eSIM Trung Quốc đi được Google | Mua eSIM China nhận QR nhanh | eSIM CN',
-    description:
-      'Mua eSIM Trung Quốc nhận QR nhanh, xem gói rõ ràng trên cả điện thoại và máy tính, có hướng dẫn cài đặt và hỗ trợ tiếng Việt.',
+    title: context.homeMetaTitle,
+    description: context.homeMetaDescription,
     pathname: '/',
     body,
     context,
@@ -6015,7 +6273,7 @@ export const renderPlanPage = (context: RenderContext, plan: Plan, planList: Pla
       '@type': 'Product',
       name: getPublicPlanName(plan),
       description: plan.description,
-      brand: { '@type': 'Brand', name: brand.name },
+      brand: { '@type': 'Brand', name: context.siteName },
       offers: {
         '@type': 'Offer',
         priceCurrency: 'USD',
@@ -6564,15 +6822,20 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
 
       <section class="checkout-form-card reveal">
         <div class="checkout-mobile-sheet">
-          <div class="checkout-mobile-sheet-top">
-            <span class="checkout-mobile-sheet-kicker">Gói đã chọn</span>
-            <strong data-selected-price>${selectedPrice}</strong>
-          </div>
-          <b data-selected-name>${selectedName}</b>
-          <div class="checkout-mobile-sheet-meta">
-            <span>${selectedQuantity} eSIM</span>
-            <span data-selected-data>${selectedPlan?.dataAllowance ?? ''}</span>
-            <span data-selected-days>${selectedPlan?.periodRequired ? `${selectedPeriod ?? 1} ngày` : selectedPlan?.validity ?? ''}</span>
+          <span class="checkout-mobile-sheet-kicker">Gói đã chọn</span>
+          <div class="checkout-mobile-sheet-main">
+            <div class="checkout-mobile-sheet-copy">
+              <b data-selected-name>${selectedName}</b>
+              <div class="checkout-mobile-sheet-meta">
+                <span>${selectedQuantity} eSIM</span>
+                <span data-selected-data>${selectedPlan?.dataAllowance ?? ''}</span>
+                <span data-selected-days>${selectedPlan?.periodRequired ? `${selectedPeriod ?? 1} ngày` : selectedPlan?.validity ?? ''}</span>
+              </div>
+            </div>
+            <div class="checkout-mobile-sheet-price">
+              <small>Tạm tính</small>
+              <strong data-selected-price>${selectedPrice}</strong>
+            </div>
           </div>
         </div>
         <div class="checkout-form-head">
@@ -6681,12 +6944,6 @@ export const renderPaymentPage = (
     addInfo: payment.paymentCode,
   });
   const qrSrc = `https://img.vietqr.io/image/${payment.bankCode}-${payment.accountNumber}-compact2.png?${qrParams.toString()}`;
-  const bankApps = PAYMENT_BANK_APPS.map((item) => ({
-    ...item,
-    href: buildBankAppPaymentLink(item.appId, payment),
-  }));
-  const autofillBankApps = bankApps.filter((item) => item.autofill);
-  const openOnlyBankApps = bankApps.filter((item) => !item.autofill);
   const statusLabel =
     payment.paymentStatus === 'paid'
       ? 'Đã thanh toán'
@@ -6713,8 +6970,8 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Chọn lại gói' })}
       <a class="checkout-mobile-back" href="/">Về trang chủ</a>
     </div>
     <section class="mobile-app-offer-head checkout-mobile-head">
-      <h2>Thanh Toán Đơn eSIM</h2>
-      <p>Quét QR và chuyển đúng số tiền, đúng nội dung chuyển khoản <span>››</span></p>
+      <h2>Thanh toán đơn eSIM</h2>
+      <p>Quét QR rồi chuyển đúng số tiền và đúng nội dung.</p>
     </section>
   </div>
 </section>
@@ -6754,16 +7011,31 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Chọn lại gói' })}
 
       <section class="checkout-form-card payment-qr-card reveal">
         <div data-payment-reference="${escapeHtml(payment.reference)}" data-payment-token="${escapeHtml(payment.accessToken)}" hidden></div>
+        <div class="payment-mobile-sheet">
+          <div class="payment-mobile-sheet-top">
+            <div class="payment-mobile-sheet-copy">
+              <span class="payment-mobile-sheet-kicker">Thanh toán đơn</span>
+              <b>${escapeHtml(payment.planName)}</b>
+            </div>
+            <div class="payment-mobile-sheet-price">
+              <small>Tổng tiền</small>
+              <strong>${amountLabel}</strong>
+            </div>
+          </div>
+          <div class="payment-mobile-sheet-meta">
+            <span>${escapeHtml(payment.reference)}</span>
+            <span data-payment-status-label>${statusLabel}</span>
+          </div>
+        </div>
         <div class="payment-qr-wrap">
           <img class="payment-qr-image" src="${qrSrc}" alt="QR thanh toán ${escapeHtml(payment.reference)}" />
         </div>
         <div class="payment-detail-list">
           <article class="payment-detail-row payment-detail-row-block">
             <div class="payment-detail-copy">
-              <span>Thông tin đơn</span>
-              <strong>${escapeHtml(payment.planName)}</strong>
-              <p>Mã đơn: ${escapeHtml(payment.reference)}</p>
-              <p>Người nhận QR: ${escapeHtml(payment.fullName)}</p>
+              <span>Thông tin nhận QR</span>
+              <strong>${escapeHtml(payment.fullName)}</strong>
+              <p>${escapeHtml(payment.planName)}</p>
               ${payment.phone ? `<p>Số điện thoại: ${escapeHtml(payment.phone)}</p>` : ''}
               <p>Email: ${escapeHtml(payment.email)}</p>
             </div>
@@ -6802,48 +7074,6 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Chọn lại gói' })}
             <button class="payment-copy-button" type="button" data-copy-button data-copy-value="${escapeHtml(payment.paymentCode)}">Copy</button>
           </article>
         </div>
-        <section class="payment-bank-app-card">
-          <div class="payment-bank-app-head">
-            <strong>Mở app ngân hàng từ điện thoại</strong>
-            <p>Mình check lại theo tài liệu VietQR: chỉ một số app hỗ trợ điền sẵn thông tin chuyển khoản. Các app còn lại chủ yếu chỉ mở app, chưa chắc tự điền số tiền hay nội dung.</p>
-          </div>
-          <div class="payment-bank-app-section">
-            <div class="payment-bank-app-section-head">
-              <strong>Tự điền tốt hơn</strong>
-              <span>BIDV, ACB, OCB, VietinBank hiện là nhóm hỗ trợ autofill tốt hơn theo VietQR.</span>
-            </div>
-            <div class="payment-bank-app-grid">
-              ${autofillBankApps
-                .map(
-                  (item) => `<a class="button button-secondary payment-bank-app-link payment-bank-app-link-primary" href="${escapeHtml(item.href)}" rel="noreferrer">
-                    <span>${escapeHtml(item.label)}</span>
-                    <small>Tự điền hỗ trợ</small>
-                  </a>`,
-                )
-                .join('')}
-            </div>
-          </div>
-          ${
-            openOnlyBankApps.length > 0
-              ? `<details class="payment-bank-app-more">
-                  <summary>Các app khác chỉ mở app, có thể không tự điền</summary>
-                  <div class="payment-bank-app-grid payment-bank-app-grid-more">
-                    ${openOnlyBankApps
-                      .map(
-                        (item) => `<a class="button button-secondary payment-bank-app-link" href="${escapeHtml(item.href)}" rel="noreferrer">
-                          <span>${escapeHtml(item.label)}</span>
-                          <small>Chỉ mở app</small>
-                        </a>`,
-                      )
-                      .join('')}
-                  </div>
-                </details>`
-              : ''
-          }
-          <div class="payment-bank-app-footnote">
-            Nếu app của khách không tự điền số tiền hoặc nội dung, dùng <strong>Mở ảnh QR</strong> vẫn ổn định hơn và ít lỗi nhất.
-          </div>
-        </section>
         <div class="payment-action-row payment-action-row-single">
           <a class="button button-secondary payment-open-qr" href="${qrSrc}" target="_blank" rel="noreferrer">Mở ảnh QR</a>
         </div>
@@ -6904,10 +7134,11 @@ export const renderPaymentSuccessPage = (
     planName: string;
     planMeta: string;
     amountVnd: number;
+    quantity: number;
     topUpSupported: boolean;
     provisioningStatus: string | null;
     provisioningError: string | null;
-    esim: {
+    esims: Array<{
       qrCodeUrl: string;
       shortUrl: string;
       activationCode: string;
@@ -6917,7 +7148,7 @@ export const renderPaymentSuccessPage = (
       puk: string;
       smdpStatus: string;
       eid: string;
-    } | null;
+    }>;
   },
 ) => {
   const createdLabel = new Date(payment.createdAt).toLocaleString('vi-VN', {
@@ -6929,22 +7160,173 @@ export const renderPaymentSuccessPage = (
     timeStyle: 'short',
   });
   const amountLabel = `${moneyVnd.format(payment.amountVnd)}đ`;
-  const isReady = Boolean(payment.esim?.qrCodeUrl);
-  const activationParts = payment.esim?.activationCode ? payment.esim.activationCode.split('$') : [];
-  const smdpAddress =
-    activationParts.length >= 3 ? activationParts[1] : payment.esim?.activationCode ? payment.esim.activationCode : '';
-  const activationToken =
-    activationParts.length >= 3 ? activationParts[2] : payment.esim?.activationCode ? payment.esim.activationCode : '';
-  const appleInstallUrl = payment.esim?.activationCode ? buildAppleEsimInstallUrl(payment.esim.activationCode) : '';
-  const androidInstallUrl = payment.esim?.activationCode ? buildAndroidEsimInstallUrl(payment.esim.activationCode) : '';
-  const heroTitle = isReady ? 'QR eSIM Đã Sẵn Sàng' : 'Thanh Toán Thành Công';
+  const expectedEsimCount = Math.max(1, Math.min(99, Math.round(payment.quantity || 1)));
+  const esimCount = payment.esims.length;
+  const primaryEsim = payment.esims[0] ?? null;
+  const hasMultipleEsims = esimCount > 1;
+  const singleEsimActionsEnabled = esimCount === 1;
+  const isReady = esimCount >= expectedEsimCount && esimCount > 0;
+  const conversionEventTag = `
+    <script>
+      gtag('event', 'conversion', {
+        'send_to': ['AW-16954338776/i7SrCLrX2pccENjbupQ_'],
+        'value': ${Number.isFinite(payment.amountVnd) ? payment.amountVnd : 0},
+        'currency': 'VND',
+        'transaction_id': '${escapeHtml(payment.reference)}'
+      });
+    </script>`;
+  const primaryAppleInstallUrl = primaryEsim?.activationCode ? buildAppleEsimInstallUrl(primaryEsim.activationCode) : '';
+  const primaryAndroidInstallUrl = primaryEsim?.activationCode ? buildAndroidEsimInstallUrl(primaryEsim.activationCode) : '';
+  const heroTitle = isReady
+    ? hasMultipleEsims
+      ? `${esimCount} QR eSIM Đã Sẵn Sàng`
+      : 'QR eSIM Đã Sẵn Sàng'
+    : 'Thanh Toán Thành Công';
   const heroCopy = isReady
-    ? 'QR eSIM thật đã sẵn sàng. Anh có thể quét QR hoặc mở link cài đặt ngay <span>››</span>'
-    : 'Thanh toán đã ghi nhận. Hệ thống đang lấy QR eSIM thật và sẽ tự cập nhật trang này <span>››</span>';
+    ? hasMultipleEsims
+      ? `Đơn này có <strong>${esimCount} QR eSIM</strong>. Anh cài lần lượt lên đúng ${esimCount} máy cần dùng.`
+      : 'QR eSIM thật đã sẵn sàng. Anh có thể quét QR hoặc mở link cài đặt ngay <span>››</span>'
+    : `Thanh toán đã ghi nhận. Hệ thống đang lấy đủ QR eSIM thật${expectedEsimCount > 1 ? ` cho ${expectedEsimCount} máy` : ''} và sẽ tự cập nhật trang này <span>››</span>`;
   const provisioningNote =
     payment.provisioningStatus === 'failed' && payment.provisioningError
       ? payment.provisioningError
-      : 'Thanh toán đã xong. Hệ thống đang cấp QR eSIM thật, thường chỉ mất vài giây.';
+      : `Thanh toán đã xong. Hệ thống đang cấp QR eSIM thật${expectedEsimCount > 1 ? ` cho ${expectedEsimCount} máy` : ''}, thường chỉ mất vài giây.`;
+  const renderEsimCard = (
+    esim: {
+      qrCodeUrl: string;
+      shortUrl: string;
+      activationCode: string;
+      iccid: string;
+      apn: string;
+      pin: string;
+      puk: string;
+      smdpStatus: string;
+      eid: string;
+    },
+    index: number,
+  ) => {
+    const activationParts = esim.activationCode ? esim.activationCode.split('$') : [];
+    const smdpAddress = activationParts.length >= 3 ? activationParts[1] : esim.activationCode || '';
+    const activationToken = activationParts.length >= 3 ? activationParts[2] : esim.activationCode || '';
+    const appleInstallUrl = esim.activationCode ? buildAppleEsimInstallUrl(esim.activationCode) : '';
+    const androidInstallUrl = esim.activationCode ? buildAndroidEsimInstallUrl(esim.activationCode) : '';
+    const cardNumber = index + 1;
+    const usePrimaryAutomationHooks = singleEsimActionsEnabled && index === 0;
+
+    return `
+        <article class="payment-esim-card">
+          <div class="payment-esim-card-head">
+            <span class="payment-esim-card-label">${hasMultipleEsims ? `QR ${cardNumber}` : 'QR eSIM'}</span>
+            <strong>${hasMultipleEsims ? `Máy ${cardNumber} / ${esimCount}` : 'Cài trực tiếp trên máy'}</strong>
+          </div>
+          <a class="payment-qr-wrap payment-real-qr-wrap ${usePrimaryAutomationHooks ? 'payment-real-qr-link' : ''}" ${usePrimaryAutomationHooks ? 'data-esim-qr-link' : ''} href="${escapeHtml(
+            esim.shortUrl || esim.qrCodeUrl || '#',
+          )}" target="_blank" rel="noreferrer">
+            <img class="payment-qr-image payment-real-qr-image" src="${escapeHtml(esim.qrCodeUrl || '')}" alt="QR eSIM ${escapeHtml(
+              payment.reference,
+            )}${hasMultipleEsims ? ` ${cardNumber}` : ''}" />
+          </a>
+          <div class="payment-meta-grid payment-success-meta-grid">
+            <article class="payment-meta-item">
+              <span>SM-DP+</span>
+              <strong class="payment-demo-code">${escapeHtml(smdpAddress)}</strong>
+            </article>
+            <article class="payment-meta-item">
+              <span>Trạng thái</span>
+              <strong>${escapeHtml(esim.smdpStatus || 'READY')}</strong>
+            </article>
+            <article class="payment-meta-item payment-meta-item-wide">
+              <span>Mã kích hoạt</span>
+              <strong class="payment-demo-code">${escapeHtml(activationToken)}</strong>
+            </article>
+            <article class="payment-meta-item payment-meta-item-wide">
+              <span>ICCID</span>
+              <strong class="payment-demo-code">${escapeHtml(esim.iccid || '')}</strong>
+            </article>
+            ${
+              payment.phone
+                ? `<article class="payment-meta-item">
+              <span>Số điện thoại</span>
+              <strong>${escapeHtml(payment.phone)}</strong>
+            </article>`
+                : ''
+            }
+            <article class="payment-meta-item">
+              <span>APN</span>
+              <strong>${escapeHtml(esim.apn || 'Tự động')}</strong>
+            </article>
+            <article class="payment-meta-item">
+              <span>Mã PIN / PUK cài đặt</span>
+              <strong>${escapeHtml(esim.pin || '-')} / ${escapeHtml(esim.puk || '-')}</strong>
+            </article>
+            ${
+              esim.eid
+                ? `<article class="payment-meta-item payment-meta-item-wide"><span>EID</span><strong class="payment-demo-code">${escapeHtml(
+                    esim.eid,
+                  )}</strong></article>`
+                : ''
+            }
+          </div>
+          <div class="payment-action-row payment-action-row-dual">
+            <a class="button ${usePrimaryAutomationHooks ? 'button-primary' : 'button-secondary'} payment-open-qr" ${usePrimaryAutomationHooks ? 'data-esim-install-button="ios"' : ''} href="${escapeHtml(
+              appleInstallUrl || (esim.shortUrl ?? '#'),
+            )}" target="_blank" rel="noreferrer">Cài trên iPhone</a>
+            <a class="button button-secondary payment-open-qr" ${usePrimaryAutomationHooks ? 'data-esim-install-button="android"' : ''} href="${escapeHtml(
+              androidInstallUrl || (esim.shortUrl ?? '#'),
+            )}" target="_blank" rel="noreferrer">Cài trên Android</a>
+          </div>
+          <div class="payment-action-row payment-action-row-single">
+            <a class="button button-secondary payment-open-qr" href="${escapeHtml(
+              esim.qrCodeUrl ?? esim.shortUrl ?? '#',
+            )}" target="_blank" rel="noreferrer">Mở ảnh QR</a>
+          </div>
+          <details class="payment-mobile-details">
+            <summary>${hasMultipleEsims ? `Thông tin QR ${cardNumber}` : 'Xem thông tin cài đặt'}</summary>
+            <div class="payment-mobile-details-body">
+              <div class="payment-mobile-details-row">
+                <span>SM-DP+</span>
+                <strong class="payment-demo-code">${escapeHtml(smdpAddress)}</strong>
+              </div>
+              <div class="payment-mobile-details-row">
+                <span>Trạng thái</span>
+                <strong>${escapeHtml(esim.smdpStatus || 'READY')}</strong>
+              </div>
+              <div class="payment-mobile-details-row">
+                <span>Mã kích hoạt</span>
+                <strong class="payment-demo-code">${escapeHtml(activationToken)}</strong>
+              </div>
+              <div class="payment-mobile-details-row">
+                <span>ICCID</span>
+                <strong class="payment-demo-code">${escapeHtml(esim.iccid || '')}</strong>
+              </div>
+              ${
+                payment.phone
+                  ? `<div class="payment-mobile-details-row">
+                <span>Số điện thoại</span>
+                <strong>${escapeHtml(payment.phone)}</strong>
+              </div>`
+                  : ''
+              }
+              <div class="payment-mobile-details-row">
+                <span>APN</span>
+                <strong>${escapeHtml(esim.apn || 'Tự động')}</strong>
+              </div>
+              <div class="payment-mobile-details-row">
+                <span>Mã PIN / PUK</span>
+                <strong>${escapeHtml(esim.pin || '-')} / ${escapeHtml(esim.puk || '-')}</strong>
+              </div>
+              ${
+                esim.eid
+                  ? `<div class="payment-mobile-details-row">
+                <span>EID</span>
+                <strong class="payment-demo-code">${escapeHtml(esim.eid)}</strong>
+              </div>`
+                  : ''
+              }
+            </div>
+          </details>
+        </article>`;
+  };
   const body = `
 ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
 <section class="checkout-mobile-top">
@@ -6974,12 +7356,16 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
         </div>
         <div class="checkout-summary-selected">
           <b>${escapeHtml(payment.planName)}</b>
-          <p>${escapeHtml(payment.planMeta)}</p>
+          <p>${escapeHtml(payment.planMeta)} · ${expectedEsimCount} eSIM</p>
         </div>
         <div class="checkout-stat-grid">
           <article class="checkout-stat">
             <span>Tổng tiền</span>
             <strong>${amountLabel}</strong>
+          </article>
+          <article class="checkout-stat">
+            <span>Số eSIM</span>
+            <strong>${moneyVnd.format(expectedEsimCount)}</strong>
           </article>
           <article class="checkout-stat">
             <span>Thanh toán lúc</span>
@@ -6994,135 +7380,32 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
         <div class="checkout-perk-list">
           <span>Tạo lúc ${escapeHtml(createdLabel)}</span>
           <span>Nội dung chuyển khoản đã dùng: <strong>${escapeHtml(payment.paymentCode)}</strong>.</span>
-          <span>${
-            isReady
-              ? 'QR eSIM thật đã sẵn sàng và được lưu trong đơn này.'
-              : escapeHtml(provisioningNote)
-          }</span>
-          ${
-            isReady
-              ? '<span>Nếu chưa muốn cài ngay, anh có thể mở lại trang này hoặc email QR để lấy lại thông tin sau.</span>'
-              : '<span>Nếu chờ quá lâu, tải lại trang một lần hoặc kiểm tra email vì QR thật sẽ được gửi ngay khi sẵn sàng.</span>'
-          }
+          <span>${isReady ? (hasMultipleEsims ? `Đã cấp đủ ${esimCount} QR eSIM và lưu chung trong đơn này.` : 'QR eSIM thật đã sẵn sàng và được lưu trong đơn này.') : escapeHtml(provisioningNote)}</span>
+          ${isReady ? (hasMultipleEsims ? '<span>Mỗi QR tương ứng một eSIM riêng. Anh cài lần lượt lên đúng từng máy cần dùng.</span>' : '<span>Nếu chưa muốn cài ngay, anh có thể mở lại trang này hoặc email QR để lấy lại thông tin sau.</span>') : '<span>Nếu chờ quá lâu, tải lại trang một lần hoặc kiểm tra email vì QR thật sẽ được gửi ngay khi sẵn sàng.</span>'}
         </div>
       </aside>
 
       <section class="checkout-form-card payment-qr-card payment-success-card reveal">
-        <div data-esim-reference="${escapeHtml(payment.reference)}" data-esim-token="${escapeHtml(payment.accessToken)}" data-esim-ready="${isReady ? 'true' : 'false'}" data-esim-topup-enabled="${payment.topUpSupported ? 'true' : 'false'}" data-esim-ios-url="${escapeHtml(
-          appleInstallUrl,
-        )}" data-esim-android-url="${escapeHtml(androidInstallUrl)}" data-esim-qr-url="${escapeHtml(payment.esim?.qrCodeUrl ?? '')}" hidden></div>
+        <div data-esim-reference="${escapeHtml(payment.reference)}" data-esim-token="${escapeHtml(payment.accessToken)}" data-esim-ready="${isReady ? 'true' : 'false'}" data-esim-topup-enabled="${singleEsimActionsEnabled && payment.topUpSupported ? 'true' : 'false'}" data-esim-ios-url="${escapeHtml(
+          primaryAppleInstallUrl,
+        )}" data-esim-android-url="${escapeHtml(primaryAndroidInstallUrl)}" data-esim-qr-url="${escapeHtml(primaryEsim?.qrCodeUrl ?? '')}" hidden></div>
         <div class="payment-success-banner">
-          <span class="payment-success-badge">${isReady ? 'Đã cấp eSIM thật' : 'Đang cấp eSIM thật'}</span>
-          <strong>${isReady ? 'QR eSIM Thật' : 'Đang chuẩn bị QR eSIM'}</strong>
-          <p>${isReady ? 'Quét QR hoặc mở link cài đặt bên dưới để cài trực tiếp lên máy.' : escapeHtml(provisioningNote)}</p>
+          <span class="payment-success-badge">${isReady ? (hasMultipleEsims ? `Đã cấp ${esimCount}/${expectedEsimCount} eSIM` : 'Đã cấp eSIM thật') : 'Đang cấp eSIM thật'}</span>
+          <strong>${isReady ? (hasMultipleEsims ? `Đủ ${esimCount} QR cài đặt` : 'QR eSIM thật') : 'Đang chuẩn bị QR eSIM'}</strong>
+          <p>${isReady ? (hasMultipleEsims ? `Đơn này có ${esimCount} QR riêng. Anh cài lần lượt từng QR lên đúng ${esimCount} thiết bị cần dùng.` : 'Quét QR hoặc mở link cài đặt bên dưới để cài trực tiếp lên máy.') : escapeHtml(provisioningNote)}</p>
         </div>
         ${
           isReady
             ? `
-        <a class="payment-qr-wrap payment-real-qr-wrap payment-real-qr-link" data-esim-qr-link href="${escapeHtml(
-          payment.esim?.shortUrl ?? payment.esim?.qrCodeUrl ?? '#',
-        )}" target="_blank" rel="noreferrer">
-          <img class="payment-qr-image payment-real-qr-image" src="${escapeHtml(payment.esim?.qrCodeUrl ?? '')}" alt="QR eSIM ${escapeHtml(
-              payment.reference,
-            )}" />
-        </a>
-        <div class="payment-meta-grid payment-success-meta-grid">
-          <article class="payment-meta-item">
-            <span>SM-DP+</span>
-            <strong class="payment-demo-code">${escapeHtml(smdpAddress)}</strong>
-          </article>
-          <article class="payment-meta-item">
-            <span>Trạng thái</span>
-            <strong>${escapeHtml(payment.esim?.smdpStatus || 'READY')}</strong>
-          </article>
-          <article class="payment-meta-item payment-meta-item-wide">
-            <span>Mã kích hoạt</span>
-            <strong class="payment-demo-code">${escapeHtml(activationToken)}</strong>
-          </article>
-          <article class="payment-meta-item payment-meta-item-wide">
-            <span>ICCID</span>
-            <strong class="payment-demo-code">${escapeHtml(payment.esim?.iccid || '')}</strong>
-          </article>
-          ${
-            payment.phone
-              ? `<article class="payment-meta-item">
-            <span>Số điện thoại</span>
-            <strong>${escapeHtml(payment.phone)}</strong>
-          </article>`
-              : ''
-          }
-          <article class="payment-meta-item">
-            <span>APN</span>
-            <strong>${escapeHtml(payment.esim?.apn || 'Tự động')}</strong>
-          </article>
-          <article class="payment-meta-item">
-            <span>Mã PIN / PUK cài đặt</span>
-            <strong>${escapeHtml(payment.esim?.pin || '-')} / ${escapeHtml(payment.esim?.puk || '-')}</strong>
-          </article>
-          ${
-            payment.esim?.eid
-              ? `<article class="payment-meta-item payment-meta-item-wide"><span>EID</span><strong class="payment-demo-code">${escapeHtml(
-                  payment.esim.eid,
-                )}</strong></article>`
-              : ''
-          }
+        <div class="payment-esim-list">
+          ${payment.esims.map((esim, index) => renderEsimCard(esim, index)).join('')}
         </div>
-        <div class="payment-action-row payment-action-row-dual">
-          <a class="button button-primary payment-open-qr" data-esim-install-button="ios" href="${escapeHtml(appleInstallUrl || (payment.esim?.shortUrl ?? '#'))}" target="_blank" rel="noreferrer">Cài trên iPhone</a>
-          <a class="button button-secondary payment-open-qr" data-esim-install-button="android" href="${escapeHtml(androidInstallUrl || (payment.esim?.shortUrl ?? '#'))}" target="_blank" rel="noreferrer">Cài trên Android</a>
-        </div>
-        <div class="payment-action-row payment-action-row-single">
-          <a class="button button-secondary payment-open-qr" href="${escapeHtml(
-            payment.esim?.qrCodeUrl ?? payment.esim?.shortUrl ?? '#',
-          )}" target="_blank" rel="noreferrer">Mở ảnh QR</a>
-        </div>
-        <details class="payment-mobile-details">
-          <summary>Xem thông tin cài đặt</summary>
-          <div class="payment-mobile-details-body">
-            <div class="payment-mobile-details-row">
-              <span>SM-DP+</span>
-              <strong class="payment-demo-code">${escapeHtml(smdpAddress)}</strong>
-            </div>
-            <div class="payment-mobile-details-row">
-              <span>Trạng thái</span>
-              <strong>${escapeHtml(payment.esim?.smdpStatus || 'READY')}</strong>
-            </div>
-            <div class="payment-mobile-details-row">
-              <span>Mã kích hoạt</span>
-              <strong class="payment-demo-code">${escapeHtml(activationToken)}</strong>
-            </div>
-            <div class="payment-mobile-details-row">
-              <span>ICCID</span>
-              <strong class="payment-demo-code">${escapeHtml(payment.esim?.iccid || '')}</strong>
-            </div>
-            ${
-              payment.phone
-                ? `<div class="payment-mobile-details-row">
-              <span>Số điện thoại</span>
-              <strong>${escapeHtml(payment.phone)}</strong>
-            </div>`
-                : ''
-            }
-            <div class="payment-mobile-details-row">
-              <span>APN</span>
-              <strong>${escapeHtml(payment.esim?.apn || 'Tự động')}</strong>
-            </div>
-            <div class="payment-mobile-details-row">
-              <span>Mã PIN / PUK</span>
-              <strong>${escapeHtml(payment.esim?.pin || '-')} / ${escapeHtml(payment.esim?.puk || '-')}</strong>
-            </div>
-            ${
-              payment.esim?.eid
-                ? `<div class="payment-mobile-details-row">
-              <span>EID</span>
-              <strong class="payment-demo-code">${escapeHtml(payment.esim.eid)}</strong>
-            </div>`
-                : ''
-            }
-          </div>
-        </details>
         <div class="checkout-form-note payment-note payment-demo-note">
-          Nếu đang mở đúng trên điện thoại hỗ trợ eSIM, hệ thống sẽ tự ưu tiên đúng link cài đặt theo máy. Nếu cần, anh vẫn có thể mở ảnh QR để cài thủ công.
+          ${
+            hasMultipleEsims
+              ? `Đơn này có ${esimCount} eSIM riêng. Mỗi QR tương ứng một máy. Nếu cần cài cùng lúc, anh mở từng QR theo đúng thứ tự.`
+              : 'Nếu đang mở đúng trên điện thoại hỗ trợ eSIM, hệ thống sẽ tự ưu tiên đúng link cài đặt theo máy. Nếu cần, anh vẫn có thể mở ảnh QR để cài thủ công.'
+          }
         </div>`
             : `
         <div class="payment-provisioning-card">
@@ -7135,7 +7418,7 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
         </div>`
         }
         ${
-          isReady
+          isReady && singleEsimActionsEnabled
             ? `
         <div class="payment-action-row ${payment.topUpSupported ? 'payment-action-row-dual' : 'payment-action-row-single'}">
           <button class="button button-secondary payment-open-qr" type="button" data-esim-usage-button>Kiểm tra dung lượng</button>
@@ -7171,13 +7454,14 @@ ${footer(context)}
   return layout({
     title: `${payment.reference} | Thanh toán thành công | eSIM CN`,
     description: isReady
-      ? `Đơn ${payment.reference} đã thanh toán thành công và QR eSIM thật đã sẵn sàng.`
+      ? `Đơn ${payment.reference} đã thanh toán thành công và ${hasMultipleEsims ? `${esimCount} QR eSIM` : 'QR eSIM thật'} đã sẵn sàng.`
       : `Đơn ${payment.reference} đã thanh toán thành công và đang chờ QR eSIM thật được cấp.`,
     pathname: buildPaymentSuccessPath(payment.reference),
     body,
     bodyClass: 'page-checkout page-payment page-payment-success',
     context,
     robots: 'noindex,nofollow,noarchive',
+    headScripts: conversionEventTag,
   });
 };
 
@@ -7233,6 +7517,236 @@ export const renderAdminLoginPage = (context: RenderContext, options: AdminLogin
 };
 
 export const renderAdminDashboardPage = (context: RenderContext, dashboard: AdminDashboardPageData) => {
+  const siteAssetAccept = 'image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml,image/x-icon,.ico';
+  const renderAssetThumb = (value: string, emptyLabel: string, alt: string) =>
+    value
+      ? `<img src="${escapeHtml(value)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" />`
+      : `<span>${escapeHtml(emptyLabel)}</span>`;
+  const renderAssetField = ({
+    name,
+    label,
+    value,
+    placeholder,
+    help,
+    wide = false,
+    emptyLabel,
+  }: {
+    name: keyof AdminSiteSettings;
+    label: string;
+    value: string;
+    placeholder: string;
+    help: string;
+    wide?: boolean;
+    emptyLabel: string;
+  }) => `
+    <label class="admin-settings-field${wide ? ' admin-settings-field-wide' : ''}">
+      <span>${escapeHtml(label)}</span>
+      <input
+        type="text"
+        name="${escapeHtml(name)}"
+        maxlength="1000"
+        value="${escapeHtml(value)}"
+        placeholder="${escapeHtml(placeholder)}"
+        data-site-asset-url-input="${escapeHtml(name)}"
+      />
+      <div class="admin-settings-asset-tools">
+        <div class="admin-settings-asset-thumb" data-site-asset-thumb="${escapeHtml(name)}">
+          ${renderAssetThumb(value, emptyLabel, `${label} preview`)}
+        </div>
+        <div class="admin-settings-asset-actions">
+          <label class="button button-secondary admin-settings-upload-button${dashboard.assetUploadEnabled ? '' : ' is-disabled'}">
+            <input
+              type="file"
+              accept="${siteAssetAccept}"
+              data-site-asset-input="${escapeHtml(name)}"
+              ${dashboard.assetUploadEnabled ? '' : 'disabled'}
+            />
+            Tải ảnh lên Cloudflare
+          </label>
+          <button class="button button-secondary" type="button" data-site-asset-clear="${escapeHtml(name)}">Xóa URL</button>
+          <small data-site-asset-status="${escapeHtml(name)}">${
+            dashboard.assetUploadMode === 'r2'
+              ? `Chọn file để upload lên Cloudflare R2. Ảnh/GIF có thể lớn tới khoảng ${escapeHtml(dashboard.assetUploadLimitLabel)}. URL sẽ tự điền vào ô này.`
+              : dashboard.assetUploadMode === 'd1'
+                ? `Chọn file để upload lên Cloudflare. Hiện đang dùng D1 nên file cần nhỏ hơn khoảng ${escapeHtml(dashboard.assetUploadLimitLabel)}. GIF lớn nên dán URL ngoài hoặc bật R2.`
+                : 'Upload ảnh đang tắt vì worker chưa bật lưu ảnh trên Cloudflare.'
+          }</small>
+        </div>
+      </div>
+      <small>${escapeHtml(help)}</small>
+    </label>`;
+  const renderAssetGalleryField = ({
+    name,
+    label,
+    value,
+    placeholder,
+    help,
+    emptyLabel,
+  }: {
+    name: keyof AdminSiteSettings;
+    label: string;
+    value: string;
+    placeholder: string;
+    help: string;
+    emptyLabel: string;
+  }) => `
+    <label class="admin-settings-field admin-settings-field-wide">
+      <span>${escapeHtml(label)}</span>
+      <textarea
+        name="${escapeHtml(name)}"
+        rows="4"
+        maxlength="4000"
+        placeholder="${escapeHtml(placeholder)}"
+        data-site-asset-url-input="${escapeHtml(name)}"
+        data-site-asset-list-input
+      >${escapeHtml(value)}</textarea>
+      <div class="admin-settings-asset-tools admin-settings-asset-tools-gallery">
+        <div class="admin-settings-asset-thumb admin-settings-asset-thumb-gallery" data-site-asset-thumb="${escapeHtml(name)}">
+          ${renderAssetThumb(parseAssetUrlList(value)[0] ?? '', emptyLabel, `${label} preview`)}
+        </div>
+        <div class="admin-settings-asset-actions">
+          <label class="button button-secondary admin-settings-upload-button${dashboard.assetUploadEnabled ? '' : ' is-disabled'}">
+            <input
+              type="file"
+              accept="${siteAssetAccept}"
+              data-site-asset-input="${escapeHtml(name)}"
+              data-site-asset-multiple="append"
+              multiple
+              ${dashboard.assetUploadEnabled ? '' : 'disabled'}
+            />
+            Tải nhiều ảnh lên Cloudflare
+          </label>
+          <button class="button button-secondary" type="button" data-site-asset-clear="${escapeHtml(name)}">Xóa danh sách</button>
+          <small data-site-asset-status="${escapeHtml(name)}">${
+            dashboard.assetUploadMode === 'r2'
+              ? `Chọn nhiều ảnh để upload lên Cloudflare R2. Mỗi ảnh/GIF tối đa khoảng ${escapeHtml(dashboard.assetUploadLimitLabel)}.`
+              : dashboard.assetUploadMode === 'd1'
+                ? `Chọn nhiều ảnh để upload lên Cloudflare. Hiện đang dùng D1 nên mỗi file cần nhỏ hơn khoảng ${escapeHtml(dashboard.assetUploadLimitLabel)}.`
+                : 'Upload ảnh đang tắt vì worker chưa bật lưu ảnh trên Cloudflare.'
+          }</small>
+        </div>
+      </div>
+      <small>${escapeHtml(help)}</small>
+    </label>`;
+  const siteSettingsForm = `
+    <form class="admin-settings-form admin-surface" action="/admin/site-settings" method="post" data-site-settings-form>
+      <input type="hidden" name="csrfToken" value="${escapeHtml(dashboard.csrfToken)}" />
+      <div class="admin-surface-head">
+        <div>
+          <span class="section-kicker">Site Settings</span>
+          <h2>Logo, hero và SEO cơ bản</h2>
+          <p>Những field này chỉ đổi phần public-facing của website, không đụng vào config thanh toán hay email vận hành.</p>
+        </div>
+        <button class="button button-primary" type="submit">Lưu Site Settings</button>
+      </div>
+      <div class="admin-settings-grid">
+        <label class="admin-settings-field">
+          <span>Tên thương hiệu</span>
+          <input type="text" name="siteName" maxlength="120" value="${escapeHtml(dashboard.siteSettings.siteName)}" required data-site-settings-preview-source="siteName" />
+        </label>
+        <label class="admin-settings-field">
+          <span>Email hiển thị</span>
+          <input type="email" name="supportEmail" maxlength="160" value="${escapeHtml(dashboard.siteSettings.supportEmail)}" required />
+        </label>
+        ${renderAssetField({
+          name: 'logoUrl',
+          label: 'Logo URL',
+          value: dashboard.siteSettings.logoUrl,
+          placeholder: 'https://... hoặc /site-assets/...',
+          help: 'Để trống nếu muốn dùng logo chữ hiện tại.',
+          emptyLabel: 'Logo',
+        })}
+        ${renderAssetField({
+          name: 'faviconUrl',
+          label: 'Favicon URL',
+          value: dashboard.siteSettings.faviconUrl,
+          placeholder: 'https://... hoặc /site-assets/...',
+          help: 'Để trống nếu vẫn dùng favicon mặc định.',
+          emptyLabel: 'Favicon',
+        })}
+        <label class="admin-settings-field admin-settings-field-wide">
+          <span>Hero title</span>
+          <input type="text" name="homeHeroTitle" maxlength="180" value="${escapeHtml(dashboard.siteSettings.homeHeroTitle)}" required data-site-settings-preview-source="homeHeroTitle" />
+        </label>
+        <label class="admin-settings-field admin-settings-field-wide">
+          <span>Hero description</span>
+          <textarea name="homeHeroDescription" rows="3" maxlength="400" required data-site-settings-preview-source="homeHeroDescription">${escapeHtml(dashboard.siteSettings.homeHeroDescription)}</textarea>
+        </label>
+        ${renderAssetField({
+          name: 'homeHeroBannerUrl',
+          label: 'Hero banner image URL',
+          value: dashboard.siteSettings.homeHeroBannerUrl,
+          placeholder: 'https://... hoặc /site-assets/...',
+          help: 'Ảnh chính, vẫn dùng nếu chưa thêm gallery bên dưới.',
+          emptyLabel: 'Hero banner',
+          wide: true,
+        })}
+        ${renderAssetGalleryField({
+          name: 'homeHeroBannerGalleryUrls',
+          label: 'Hero banner gallery URLs',
+          value: dashboard.siteSettings.homeHeroBannerGalleryUrls,
+          placeholder: 'Mỗi dòng một URL ảnh. Có thể upload nhiều ảnh cùng lúc.',
+          help: 'Nếu có từ 2 ảnh trở lên, homepage sẽ tự chạy carousel nhẹ trên cả desktop và mobile.',
+          emptyLabel: 'Hero gallery',
+        })}
+        <label class="admin-settings-field admin-settings-field-wide">
+          <span>Footer description</span>
+          <textarea name="footerDescription" rows="3" maxlength="260" required data-site-settings-preview-source="footerDescription">${escapeHtml(dashboard.siteSettings.footerDescription)}</textarea>
+        </label>
+        <label class="admin-settings-field admin-settings-field-wide">
+          <span>Homepage SEO title</span>
+          <input type="text" name="homeMetaTitle" maxlength="180" value="${escapeHtml(dashboard.siteSettings.homeMetaTitle)}" required data-site-settings-preview-source="homeMetaTitle" />
+        </label>
+        <label class="admin-settings-field admin-settings-field-wide">
+          <span>Homepage meta description</span>
+          <textarea name="homeMetaDescription" rows="3" maxlength="320" required data-site-settings-preview-source="homeMetaDescription">${escapeHtml(dashboard.siteSettings.homeMetaDescription)}</textarea>
+        </label>
+        ${renderAssetField({
+          name: 'socialImageUrl',
+          label: 'Social image URL',
+          value: dashboard.siteSettings.socialImageUrl,
+          placeholder: 'https://... hoặc /site-assets/...',
+          help: 'Dùng cho og:image và twitter:image. Để trống sẽ dùng ảnh mặc định hiện tại.',
+          emptyLabel: 'Social image',
+          wide: true,
+        })}
+      </div>
+    </form>
+    <aside class="admin-surface admin-settings-preview">
+      <div class="admin-surface-head">
+        <div>
+          <span class="section-kicker">Preview</span>
+          <h2>Nhìn nhanh phần public</h2>
+          <p>Check nhanh text và asset trước khi ra ngoài site live.</p>
+        </div>
+      </div>
+      <div class="admin-settings-preview-card">
+        <div data-site-settings-preview-logo>
+          ${
+            dashboard.siteSettings.logoUrl
+              ? `<img class="admin-settings-logo" src="${escapeHtml(dashboard.siteSettings.logoUrl)}" alt="${escapeHtml(dashboard.siteSettings.siteName)}" />`
+              : '<span class="admin-settings-logo-fallback">e</span>'
+          }
+        </div>
+        <div class="admin-settings-preview-copy">
+          <strong data-site-settings-preview-text="siteName">${escapeHtml(dashboard.siteSettings.siteName)}</strong>
+          <p data-site-settings-preview-text="homeHeroTitle">${escapeHtml(dashboard.siteSettings.homeHeroTitle)}</p>
+          <small data-site-settings-preview-text="homeHeroDescription">${escapeHtml(dashboard.siteSettings.homeHeroDescription)}</small>
+        </div>
+      </div>
+      <div class="admin-settings-preview-meta">
+        <span>Footer</span>
+        <strong data-site-settings-preview-text="footerDescription">${escapeHtml(dashboard.siteSettings.footerDescription)}</strong>
+      </div>
+      <div class="admin-settings-preview-meta">
+        <span>SEO title</span>
+        <strong data-site-settings-preview-text="homeMetaTitle">${escapeHtml(dashboard.siteSettings.homeMetaTitle)}</strong>
+      </div>
+      <div class="admin-settings-preview-meta">
+        <span>Meta description</span>
+        <strong data-site-settings-preview-text="homeMetaDescription">${escapeHtml(dashboard.siteSettings.homeMetaDescription)}</strong>
+      </div>
+    </aside>`;
   const summaryCards = [
     { label: 'Nguồn catalog', value: dashboard.catalogSourceLabel, tone: 'muted' },
     { label: 'Gói đang bán', value: `${moneyVnd.format(dashboard.totalPlans)}`, tone: 'neutral' },
@@ -7433,6 +7947,7 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
         <a href="#crm" data-admin-tab-trigger="crm">CRM <span>${moneyVnd.format(dashboard.customers.length)}</span></a>
         <a href="#orders" data-admin-tab-trigger="orders">Orders <span>${moneyVnd.format(dashboard.orders.length)}</span></a>
         <a href="#payments" data-admin-tab-trigger="payments">Payments <span>${moneyVnd.format(dashboard.webhookEvents.length)}</span></a>
+        <a href="#settings" data-admin-tab-trigger="settings">Settings <span>CMS</span></a>
         <a href="#pricing" data-admin-tab-trigger="pricing">Pricing <span>${moneyVnd.format(dashboard.totalPlans)}</span></a>
         ${dashboard.plansByGroup
           .map(
@@ -7487,6 +8002,7 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
         <a class="admin-tab-chip" href="#crm" data-admin-tab-trigger="crm">CRM</a>
         <a class="admin-tab-chip" href="#orders" data-admin-tab-trigger="orders">Orders</a>
         <a class="admin-tab-chip" href="#payments" data-admin-tab-trigger="payments">Payments</a>
+        <a class="admin-tab-chip" href="#settings" data-admin-tab-trigger="settings">Settings</a>
         <a class="admin-tab-chip" href="#pricing" data-admin-tab-trigger="pricing">Pricing</a>
       </section>
 
@@ -7570,6 +8086,19 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
           </div>
         </aside>
         </section>
+      </section>
+
+      <section class="admin-tab-panel admin-stage" id="settings" data-admin-tab-panel="settings" hidden>
+        <div class="admin-stage-head">
+          <div>
+            <span class="section-kicker">Site Settings</span>
+            <h2>Logo, hero banner và metadata</h2>
+            <p>Nhóm setting này điều khiển phần giao diện public, để anh đổi nhanh mà không phải sửa code hay deploy tay.</p>
+          </div>
+        </div>
+        <div class="admin-settings-layout">
+          ${siteSettingsForm}
+        </div>
       </section>
 
       <section class="admin-tab-panel" id="crm" data-admin-tab-panel="crm" hidden>
@@ -7844,9 +8373,23 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
   const opsCards = Array.from(document.querySelectorAll('[data-admin-ops-card]'));
   const tabPanels = Array.from(document.querySelectorAll('[data-admin-tab-panel]'));
   const tabTriggers = Array.from(document.querySelectorAll('[data-admin-tab-trigger]'));
+  const siteSettingsForm = document.querySelector('[data-site-settings-form]');
+  const assetFileInputs = Array.from(document.querySelectorAll('[data-site-asset-input]'));
+  const assetClearButtons = Array.from(document.querySelectorAll('[data-site-asset-clear]'));
+  const assetThumbs = Array.from(document.querySelectorAll('[data-site-asset-thumb]'));
+  const assetStatusNodes = Array.from(document.querySelectorAll('[data-site-asset-status]'));
+  const previewTextNodes = Array.from(document.querySelectorAll('[data-site-settings-preview-text]'));
+  const previewLogoNode = document.querySelector('[data-site-settings-preview-logo]');
 
   let planQuery = '';
   let opsQuery = '';
+  const assetLabelMap = {
+    logoUrl: 'Logo',
+    faviconUrl: 'Favicon',
+    homeHeroBannerUrl: 'Hero banner',
+    homeHeroBannerGalleryUrls: 'Hero gallery',
+    socialImageUrl: 'Social image',
+  };
 
   const syncInputValues = (inputs, value) => {
     inputs.forEach((input) => {
@@ -7854,6 +8397,76 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
         input.value = value;
       }
     });
+  };
+  const escapeMarkup = (value) =>
+    String(value || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  const getSiteSettingsField = (name) =>
+    siteSettingsForm instanceof HTMLFormElement ? siteSettingsForm.querySelector('[name="' + name + '"]') : null;
+  const getAssetUrlValue = (name) => {
+    const field = getSiteSettingsField(name);
+    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+      return field.value.trim();
+    }
+    return '';
+  };
+  const setAssetStatus = (name, message, tone) => {
+    assetStatusNodes.forEach((node) => {
+      if (!(node instanceof HTMLElement) || node.getAttribute('data-site-asset-status') !== name) {
+        return;
+      }
+      node.textContent = message;
+      node.dataset.tone = tone || 'neutral';
+    });
+  };
+  const renderAssetThumb = (node, url, label) => {
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
+    const urls = String(url || '')
+      .split(/[\\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    node.innerHTML = urls.length
+      ? urls.map((item, index) => '<img src="' + escapeMarkup(item) + '" alt="' + escapeMarkup(label) + ' ' + (index + 1) + '" loading="lazy" decoding="async" />').join('')
+      : '<span>' + escapeMarkup(label) + '</span>';
+  };
+  const syncSiteSettingsPreview = () => {
+    if (!(siteSettingsForm instanceof HTMLFormElement)) {
+      return;
+    }
+
+    previewTextNodes.forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+      const source = node.getAttribute('data-site-settings-preview-text') || '';
+      const field = getSiteSettingsField(source);
+      const nextText = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement ? field.value.trim() : '';
+      node.textContent = nextText;
+    });
+
+    assetThumbs.forEach((node) => {
+      const name = node.getAttribute('data-site-asset-thumb') || '';
+      if (!name) {
+        return;
+      }
+      renderAssetThumb(node, getAssetUrlValue(name), assetLabelMap[name] || 'Ảnh');
+    });
+
+    if (previewLogoNode instanceof HTMLElement) {
+      const logoUrl = getAssetUrlValue('logoUrl');
+      const siteNameField = getSiteSettingsField('siteName');
+      const siteName = siteNameField instanceof HTMLInputElement ? siteNameField.value.trim() : 'eSIM CN';
+      previewLogoNode.innerHTML = logoUrl
+        ? '<img class="admin-settings-logo" src="' + escapeMarkup(logoUrl) + '" alt="' + escapeMarkup(siteName || 'eSIM CN') + '" />'
+        : '<span class="admin-settings-logo-fallback">e</span>';
+    }
   };
 
   const resolveTabFromHash = (hash) => {
@@ -7866,6 +8479,7 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
     if (cleanHash === 'crm' || cleanHash === 'customers') return 'crm';
     if (cleanHash === 'orders') return 'orders';
     if (cleanHash === 'payments' || cleanHash === 'webhooks') return 'payments';
+    if (cleanHash === 'settings') return 'settings';
     if (cleanHash === 'pricing' || cleanHash.startsWith('group-') || cleanHash.startsWith('plan-')) return 'pricing';
     return 'overview';
   };
@@ -7948,6 +8562,103 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
     }
   });
 
+  if (siteSettingsForm instanceof HTMLFormElement) {
+    siteSettingsForm.querySelectorAll('[data-site-settings-preview-source], [data-site-asset-url-input]').forEach((field) => {
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        field.addEventListener('input', syncSiteSettingsPreview);
+      }
+    });
+  }
+
+  assetClearButtons.forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    button.addEventListener('click', () => {
+      const target = button.getAttribute('data-site-asset-clear') || '';
+      const field = getSiteSettingsField(target);
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        field.value = '';
+        setAssetStatus(target, 'Đã xóa URL khỏi form. Bấm Lưu Site Settings để áp dụng.', 'neutral');
+        syncSiteSettingsPreview();
+      }
+    });
+  });
+
+  assetFileInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    input.addEventListener('change', async () => {
+      const target = input.getAttribute('data-site-asset-input') || '';
+      const files = Array.from(input.files || []);
+      const csrfField = getSiteSettingsField('csrfToken');
+      const csrfToken = csrfField instanceof HTMLInputElement ? csrfField.value : '';
+      const urlField = getSiteSettingsField(target);
+      const uploadButton = input.closest('.admin-settings-upload-button');
+      const appendMode = input.getAttribute('data-site-asset-multiple') === 'append';
+
+      if (!files.length || !target || !(urlField instanceof HTMLInputElement || urlField instanceof HTMLTextAreaElement) || !csrfToken) {
+        input.value = '';
+        return;
+      }
+
+      input.disabled = true;
+      if (uploadButton instanceof HTMLElement) {
+        uploadButton.classList.add('is-busy');
+      }
+      setAssetStatus(target, files.length > 1 ? 'Đang upload nhiều ảnh lên Cloudflare...' : 'Đang upload ảnh lên Cloudflare...', 'loading');
+
+      try {
+        const uploadedUrls = [];
+        for (const file of files) {
+          const formData = new FormData();
+          formData.append('csrfToken', csrfToken);
+          formData.append('kind', target);
+          formData.append('file', file);
+
+          const response = await fetch('/admin/site-assets/upload', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              Accept: 'application/json',
+            },
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(result.error || 'Upload ảnh thất bại.');
+          }
+          if (typeof result.url === 'string' && result.url) {
+            uploadedUrls.push(result.url);
+          }
+        }
+
+        if (appendMode) {
+          const currentUrls = String(urlField.value || '')
+            .split(/[\\n,]+/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+          urlField.value = Array.from(new Set([...currentUrls, ...uploadedUrls])).join('\\n');
+        } else {
+          urlField.value = uploadedUrls[0] || '';
+        }
+        setAssetStatus(target, appendMode ? 'Upload xong ' + uploadedUrls.length + ' ảnh. Bấm Lưu Site Settings để áp dụng.' : 'Upload xong. URL đã được điền vào form, chỉ cần bấm Lưu Site Settings.', 'success');
+        syncSiteSettingsPreview();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Upload ảnh thất bại.';
+        setAssetStatus(target, message, 'error');
+      } finally {
+        input.value = '';
+        input.disabled = false;
+        if (uploadButton instanceof HTMLElement) {
+          uploadButton.classList.remove('is-busy');
+        }
+      }
+    });
+  });
+
   expandGroupsButtons.forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) {
       return;
@@ -7996,6 +8707,7 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
   activateTab(resolveTabFromHash(window.location.hash));
   applyPlanFilter();
   applyOpsFilter();
+  syncSiteSettingsPreview();
 })();
 </script>
 `;
@@ -8012,6 +8724,7 @@ export const renderAdminDashboardPage = (context: RenderContext, dashboard: Admi
 };
 
 export const renderArticlePage = (context: RenderContext, article: Article) => {
+  const relatedArticles = articles.filter((item) => item.slug !== article.slug).slice(0, 3);
   const schemas = [
     {
       '@context': 'https://schema.org',
@@ -8021,13 +8734,22 @@ export const renderArticlePage = (context: RenderContext, article: Article) => {
       dateModified: article.updatedAt,
       author: {
         '@type': 'Organization',
-        name: brand.name,
+        name: context.siteName,
       },
       publisher: {
         '@type': 'Organization',
-        name: brand.name,
+        name: context.siteName,
       },
       mainEntityOfPage: fullUrl(context.siteUrl, `/blog/${article.slug}`),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Trang chủ', item: fullUrl(context.siteUrl, '/') },
+        { '@type': 'ListItem', position: 2, name: 'Blog', item: fullUrl(context.siteUrl, `/blog/${article.slug}`) },
+        { '@type': 'ListItem', position: 3, name: article.title, item: fullUrl(context.siteUrl, `/blog/${article.slug}`) },
+      ],
     },
   ];
 
@@ -8076,6 +8798,31 @@ ${header(context)}
       </article>
     </div>
   </section>
+
+  ${
+    relatedArticles.length
+      ? `<section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="section-kicker">Bài liên quan</span>
+        <h2 class="section-title">Đọc thêm để chọn gói dễ hơn.</h2>
+      </div>
+      <div class="article-related-grid">
+        ${relatedArticles
+          .map(
+            (item) => `
+        <a class="article-related-card reveal" href="/blog/${item.slug}">
+          <span>${item.readingTime}</span>
+          <strong>${item.title}</strong>
+          <p>${item.excerpt}</p>
+        </a>`,
+          )
+          .join('')}
+      </div>
+    </div>
+  </section>`
+      : ''
+  }
 </main>
 ${footer(context)}
 `;
@@ -8095,11 +8842,15 @@ export const renderRobots = (context: RenderContext) =>
 
 export const renderSitemap = (context: RenderContext, planList: Plan[] = plans) => {
   const urls = ['/', '/goi-esim', '/tra-cuu-don', '/mua-goi', ...getVisiblePlans(planList).map((plan) => `/plans/${plan.slug}`), ...articles.map((article) => `/blog/${article.slug}`)];
+  const articleLastModByPath = new Map(
+    articles.map((article) => [`/blog/${article.slug}`, new Date(article.updatedAt).toISOString()]),
+  );
   const entries = urls
     .map(
       (pathname) => `
   <url>
     <loc>${fullUrl(context.siteUrl, pathname)}</loc>
+    ${articleLastModByPath.has(pathname) ? `<lastmod>${articleLastModByPath.get(pathname)}</lastmod>` : ''}
   </url>`,
     )
     .join('');

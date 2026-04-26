@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { articles, brand, plans, type Plan } from './data';
 import { fetchEsimAccessPlans } from './esimaccess';
+import { HERO_BANNER_BASE64 } from './heroBanner';
 import {
   renderAdminDashboardPage,
   renderAdminLoginPage,
@@ -18,9 +19,13 @@ import {
   renderSitemap,
 } from './render';
 import { globalStyles } from './styles';
+import { chatWidgetScript } from './chatWidget';
+import { esimCnChatSettings } from './chatConfig';
+import { callGeminiChat } from './geminiChat';
 
 type Bindings = {
   DB?: D1Database;
+  SITE_ASSETS_BUCKET?: R2Bucket;
   SITE_URL?: string;
   PRIMARY_KEYWORD?: string;
   DEFAULT_SUPPORT_EMAIL?: string;
@@ -28,6 +33,8 @@ type Bindings = {
   PAYMENT_ACCOUNT_NUMBER?: string;
   PAYMENT_ACCOUNT_NAME?: string;
   PAYMENT_WEBHOOK_SECRET?: string;
+  PAYMENT_FORWARD_NTA_URL?: string;
+  PAYMENT_FORWARD_NTA_SECRET?: string;
   PAYMENT_NOTIFY_FROM?: string;
   PAYMENT_NOTIFY_REPLY_TO?: string;
   PAYMENT_NOTIFY_BCC?: string;
@@ -36,6 +43,9 @@ type Bindings = {
   ESIM_ACCESS_SECRET?: string;
   ADMIN_USERNAME?: string;
   ADMIN_PASSWORD?: string;
+  OPENCLAW_CHAT_WEBHOOK?: string;
+  OPENCLAW_CHAT_SECRET?: string;
+  GEMINI_API_KEY?: string;
 };
 
 type StoredOrder = {
@@ -48,6 +58,7 @@ type StoredOrder = {
   plan_name: string | null;
   package_code: string | null;
   payment_code: string | null;
+  quantity: number | null;
   period_num: number | null;
   amount_usd: number | null;
   amount_vnd: number | null;
@@ -88,6 +99,48 @@ type PricingOverrideRecord = {
   override_price_usd: number | null;
   note: string | null;
   updated_at: string;
+};
+
+type StoredChatSession = {
+  id: string;
+  visitor_name: string | null;
+  visitor_phone: string | null;
+  visitor_email: string | null;
+  source: string;
+  page_url: string | null;
+  status: string;
+  lead_stage: string;
+  handoff_requested: number;
+  handoff_reason: string | null;
+  last_intent: string | null;
+  last_message_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type StoredChatMessage = {
+  id: string;
+  session_id: string;
+  role: 'user' | 'bot' | 'system';
+  body: string;
+  intent: string | null;
+  metadata_json: string | null;
+  created_at: string;
+};
+
+type SiteSettings = {
+  siteName: string;
+  supportEmail: string;
+  logoUrl: string;
+  faviconUrl: string;
+  homeHeroTitle: string;
+  homeHeroDescription: string;
+  homeHeroBannerUrl: string;
+  homeHeroBannerGalleryUrls: string;
+  footerDescription: string;
+  homeMetaTitle: string;
+  homeMetaDescription: string;
+  socialImageUrl: string;
 };
 
 type AdminSessionRecord = {
@@ -201,19 +254,13 @@ type EsimAccessPackageListResponse = EsimAccessApiResponse & {
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+const socialPreviewImageBytes = Uint8Array.from(atob(HERO_BANNER_BASE64), (char) => char.charCodeAt(0));
 const USD_TO_VND = 26000;
 const moneyVnd = new Intl.NumberFormat('vi-VN');
 const DAY_PASS_MAX_DAYS = 365;
 const ESIM_ACCESS_API_BASE = 'https://api.esimaccess.com';
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
-const DAY_PASS_DISCOUNT_TIERS = [
-  { min: 30, max: 365, rate: 0.18 },
-  { min: 20, max: 29, rate: 0.15 },
-  { min: 10, max: 19, rate: 0.11 },
-  { min: 5, max: 9, rate: 0.08 },
-  { min: 1, max: 4, rate: 0.04 },
-] as const;
 const ADMIN_SESSION_COOKIE_NAME = 'esimcn_admin';
 const ADMIN_CSRF_COOKIE_NAME = 'esimcn_admin_csrf';
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
@@ -232,9 +279,35 @@ const ORDER_ACCESS_TOKEN_PARAM = 't';
 const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 const ADMIN_LOGIN_BLOCK_MS = 30 * 60 * 1000;
+const SITE_ASSET_MAX_BYTES_D1 = 1_900_000;
+const SITE_ASSET_MAX_BYTES_R2 = 10 * MB;
+const SITE_ASSET_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const SITE_ASSET_FIELDS = ['logoUrl', 'faviconUrl', 'homeHeroBannerUrl', 'homeHeroBannerGalleryUrls', 'socialImageUrl'] as const;
+type SiteAssetField = (typeof SITE_ASSET_FIELDS)[number];
+const SITE_ASSET_ALLOWED_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+  'image/svg+xml',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+]);
+const SITE_ASSET_KIND_META: Record<SiteAssetField, { folder: string; label: string }> = {
+  logoUrl: { folder: 'logo', label: 'Logo' },
+  faviconUrl: { folder: 'favicon', label: 'Favicon' },
+  homeHeroBannerUrl: { folder: 'hero-banner', label: 'Hero banner' },
+  homeHeroBannerGalleryUrls: { folder: 'hero-banner', label: 'Hero banner phụ' },
+  socialImageUrl: { folder: 'social-image', label: 'Social image' },
+};
+const DEFAULT_FOOTER_DESCRIPTION = 'Bán eSIM Trung Quốc, Hong Kong và Macau bằng tiếng Việt, nhận QR nhanh qua email.';
+const DEFAULT_HOME_META_TITLE = 'eSIM Trung Quốc đi được Google | Mua eSIM China nhận QR nhanh | eSIM CN';
+const DEFAULT_HOME_META_DESCRIPTION =
+  'Mua eSIM Trung Quốc nhận QR nhanh, xem gói rõ ràng trên cả điện thoại và máy tính, có hướng dẫn cài đặt và hỗ trợ tiếng Việt.';
 
 const ORDER_SELECT_BASE_SQL = `SELECT
-  id, access_token, full_name, phone, email, plan_slug, plan_name, package_code, payment_code, period_num,
+  id, access_token, full_name, phone, email, plan_slug, plan_name, package_code, payment_code, quantity, period_num,
   amount_usd, amount_vnd, payment_status, created_at, paid_at, payment_email_sent_at,
   access_transaction_id, access_order_no, access_order_status, access_ordered_at,
   access_sync_status, access_sync_error, access_synced_at, access_esim_tran_no,
@@ -247,11 +320,39 @@ const ORDER_SELECT_SQL = `${ORDER_SELECT_BASE_SQL} WHERE id = ?`;
 const ORDER_SELECT_BY_PAYMENT_CODE_SQL = `${ORDER_SELECT_BASE_SQL} WHERE payment_code = ?`;
 const ORDER_LOOKUP_BY_EMAIL_SQL = `${ORDER_SELECT_BASE_SQL} WHERE email = ? COLLATE NOCASE ORDER BY created_at DESC LIMIT 20`;
 
+const CHAT_QUICK_REPLIES: string[] = [];
+const CHAT_SETTINGS = esimCnChatSettings;
+
 const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#cc3d1f"/><stop offset="1" stop-color="#7a1b0d"/></linearGradient></defs><rect width="64" height="64" rx="18" fill="url(#g)"/><path d="M19 24h10.5c8.1 0 13.5 5.2 13.5 12.1S37.6 48 29.5 48H19V24Zm9.8 17c5 0 8.1-1.8 8.1-4.9s-3.1-5-8.1-5h-3.2v9.9h3.2Z" fill="#fff5ee"/><path d="M45 18h-8v8h8z" fill="#fff5ee" opacity=".82"/></svg>`;
-const getContext = (env: Bindings) => ({
-  siteUrl: env.SITE_URL || `https://${brand.domain}`,
+const getDefaultSiteSettings = (env: Bindings): SiteSettings => ({
+  siteName: brand.name,
   supportEmail: env.DEFAULT_SUPPORT_EMAIL || brand.supportEmail,
+  logoUrl: '',
+  faviconUrl: '',
+  homeHeroTitle: brand.heroTitle,
+  homeHeroDescription: brand.heroDescription,
+  homeHeroBannerUrl: '',
+  homeHeroBannerGalleryUrls: '',
+  footerDescription: DEFAULT_FOOTER_DESCRIPTION,
+  homeMetaTitle: DEFAULT_HOME_META_TITLE,
+  homeMetaDescription: DEFAULT_HOME_META_DESCRIPTION,
+  socialImageUrl: '',
+});
+const getContext = (env: Bindings, settings: SiteSettings = getDefaultSiteSettings(env)) => ({
+  siteUrl: env.SITE_URL || `https://${brand.domain}`,
+  supportEmail: settings.supportEmail,
   primaryKeyword: env.PRIMARY_KEYWORD || brand.primaryKeyword,
+  siteName: settings.siteName,
+  logoUrl: settings.logoUrl,
+  faviconUrl: settings.faviconUrl,
+  homeHeroTitle: settings.homeHeroTitle,
+  homeHeroDescription: settings.homeHeroDescription,
+  homeHeroBannerUrl: settings.homeHeroBannerUrl,
+  homeHeroBannerGalleryUrls: settings.homeHeroBannerGalleryUrls,
+  footerDescription: settings.footerDescription,
+  homeMetaTitle: settings.homeMetaTitle,
+  homeMetaDescription: settings.homeMetaDescription,
+  socialImageUrl: settings.socialImageUrl,
 });
 
 app.use('*', async (c, next) => {
@@ -263,7 +364,8 @@ app.use('*', async (c, next) => {
   c.res.headers.set('Permissions-Policy', 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()');
   c.res.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: https://img.vietqr.io https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline'; connect-src 'self'",
+    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; frame-src 'self'; img-src 'self' data: https://img.vietqr.io https://www.google-analytics.com https://stats.g.doubleclick.net https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google.com",
+
   );
 
   const pathname = new URL(c.req.url).pathname;
@@ -366,6 +468,335 @@ const toNumber = (value: unknown) => {
   const parsed = Number.parseInt(toText(value), 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
+const truncateText = (value: unknown, maxLength: number) => toText(value).slice(0, maxLength);
+const normalizeOptionalUrl = (value: unknown, maxLength = 1000) => {
+  const trimmed = truncateText(value, maxLength);
+  if (!trimmed) return '';
+  if (trimmed.startsWith('/')) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '';
+};
+const isSiteAssetField = (value: string): value is SiteAssetField => SITE_ASSET_FIELDS.includes(value as SiteAssetField);
+const getSiteAssetExtension = (filename: string, contentType: string) => {
+  const cleanName = toText(filename);
+  const rawExtension = cleanName.includes('.') ? cleanName.split('.').pop()?.toLowerCase() || '' : '';
+  if (rawExtension && /^[a-z0-9]{1,8}$/.test(rawExtension)) {
+    return rawExtension;
+  }
+
+  switch (contentType) {
+    case 'image/png':
+      return 'png';
+    case 'image/jpeg':
+      return 'jpg';
+    case 'image/webp':
+      return 'webp';
+    case 'image/avif':
+      return 'avif';
+    case 'image/gif':
+      return 'gif';
+    case 'image/svg+xml':
+      return 'svg';
+    case 'image/x-icon':
+    case 'image/vnd.microsoft.icon':
+      return 'ico';
+    default:
+      return 'bin';
+  }
+};
+const normalizeSiteAssetContentType = (file: File) => {
+  const declaredType = toText(file.type).toLowerCase();
+  if (SITE_ASSET_ALLOWED_TYPES.has(declaredType)) {
+    return declaredType;
+  }
+
+  switch (getSiteAssetExtension(file.name, declaredType)) {
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'avif':
+      return 'image/avif';
+    case 'gif':
+      return 'image/gif';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'ico':
+      return 'image/x-icon';
+    default:
+      return '';
+  }
+};
+const buildSiteAssetKey = (kind: SiteAssetField, file: File) => {
+  const contentType = normalizeSiteAssetContentType(file);
+  const extension = getSiteAssetExtension(file.name, contentType);
+  const randomPart = crypto.randomUUID().replaceAll('-', '');
+  return `site-settings/${SITE_ASSET_KIND_META[kind].folder}/${Date.now()}-${randomPart}.${extension}`;
+};
+const buildSiteAssetPath = (key: string) => `/site-assets/${key.split('/').map((segment) => encodeURIComponent(segment)).join('/')}`;
+const getSiteAssetKeyFromPath = (pathname: string) => {
+  const prefix = '/site-assets/';
+  if (!pathname.startsWith(prefix)) return '';
+  return pathname
+    .slice(prefix.length)
+    .split('/')
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        return segment;
+      }
+    })
+    .join('/');
+};
+const toSiteAssetBinaryBody = (value: unknown): BodyInit | null => {
+  if (value instanceof ArrayBuffer) {
+    return value;
+  }
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+  }
+  if (Array.isArray(value) && value.every((item) => typeof item === 'number')) {
+    return Uint8Array.from(value);
+  }
+  return null;
+};
+const getSiteAssetMaxBytes = (env: Bindings) => (env.SITE_ASSETS_BUCKET ? SITE_ASSET_MAX_BYTES_R2 : SITE_ASSET_MAX_BYTES_D1);
+const getSiteAssetUploadMode = (env: Bindings): 'disabled' | 'd1' | 'r2' =>
+  env.SITE_ASSETS_BUCKET ? 'r2' : env.DB ? 'd1' : 'disabled';
+const clampOrderQuantity = (value: unknown) => Math.max(1, Math.min(99, Math.round(toNumber(value) || 1)));
+
+const hasReadyEsimProfile = (profile: EsimAccessProfile | null | undefined) => Boolean(toText(profile?.qrCodeUrl));
+
+const dedupeEsimProfiles = (profiles: EsimAccessProfile[]) => {
+  const seen = new Set<string>();
+  const unique: EsimAccessProfile[] = [];
+  profiles.forEach((profile, index) => {
+    if (!profile || typeof profile !== 'object') return;
+    const keyBase = [
+      toText(profile.iccid),
+      toText(profile.ac),
+      toText(profile.qrCodeUrl),
+      toText(profile.esimTranNo),
+    ].join('::');
+    const key = keyBase.replace(/:+/g, '') ? keyBase : `fallback:${index}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(profile);
+  });
+  return unique;
+};
+
+const collectEsimProfiles = (value: unknown): EsimAccessProfile[] => {
+  if (Array.isArray(value)) {
+    return dedupeEsimProfiles(value.filter((item): item is EsimAccessProfile => Boolean(item && typeof item === 'object')));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.profiles)) {
+    return dedupeEsimProfiles(record.profiles.filter((item): item is EsimAccessProfile => Boolean(item && typeof item === 'object')));
+  }
+
+  if (
+    typeof record.qrCodeUrl === 'string' ||
+    typeof record.iccid === 'string' ||
+    typeof record.ac === 'string' ||
+    typeof record.esimTranNo === 'string'
+  ) {
+    return [record as EsimAccessProfile];
+  }
+
+  return [];
+};
+
+const parseStoredEsimProfiles = (
+  order: Pick<
+    StoredOrder,
+    | 'access_raw'
+    | 'access_esim_tran_no'
+    | 'access_iccid'
+    | 'access_ac'
+    | 'access_qr_code_url'
+    | 'access_short_url'
+    | 'access_smdp_status'
+    | 'access_eid'
+    | 'access_apn'
+    | 'access_pin'
+    | 'access_puk'
+    | 'access_activate_time'
+    | 'access_installation_time'
+    | 'access_expired_time'
+    | 'access_order_no'
+    | 'access_transaction_id'
+  >,
+) => {
+  let profiles: EsimAccessProfile[] = [];
+
+  if (order.access_raw) {
+    try {
+      profiles = collectEsimProfiles(JSON.parse(order.access_raw));
+    } catch {
+      profiles = [];
+    }
+  }
+
+  if (profiles.length === 0 && order.access_qr_code_url) {
+    profiles = [
+      {
+        esimTranNo: order.access_esim_tran_no ?? undefined,
+        orderNo: order.access_order_no ?? undefined,
+        transactionId: order.access_transaction_id ?? undefined,
+        iccid: order.access_iccid ?? undefined,
+        ac: order.access_ac ?? undefined,
+        qrCodeUrl: order.access_qr_code_url ?? undefined,
+        shortUrl: order.access_short_url ?? undefined,
+        smdpStatus: order.access_smdp_status ?? undefined,
+        eid: order.access_eid ?? undefined,
+        apn: order.access_apn ?? undefined,
+        pin: order.access_pin ?? undefined,
+        puk: order.access_puk ?? undefined,
+        activateTime: order.access_activate_time ?? undefined,
+        installationTime: order.access_installation_time ?? undefined,
+        expiredTime: order.access_expired_time ?? undefined,
+      },
+    ];
+  }
+
+  return dedupeEsimProfiles(profiles).filter((profile) =>
+    Boolean(toText(profile.qrCodeUrl) || toText(profile.iccid) || toText(profile.ac)),
+  );
+};
+
+const serializeStoredEsimProfiles = (orderNo: string, transactionId: string, profiles: EsimAccessProfile[]) =>
+  JSON.stringify({
+    version: 2,
+    orderNo,
+    transactionId,
+    profiles: dedupeEsimProfiles(profiles),
+  });
+
+const loadSiteSettings = async (db: D1Database, env: Bindings): Promise<SiteSettings> => {
+  await ensureSiteSettingsSchema(db);
+  const defaults = getDefaultSiteSettings(env);
+  const record = await db
+    .prepare(
+      `SELECT
+         site_name, support_email, logo_url, favicon_url,
+         home_hero_title, home_hero_description, home_hero_banner_url, home_hero_banner_gallery_urls,
+         footer_description, home_meta_title, home_meta_description, social_image_url
+       FROM site_settings
+       WHERE id = ?`,
+    )
+    .bind('default')
+    .first<{
+      site_name: string | null;
+      support_email: string | null;
+      logo_url: string | null;
+      favicon_url: string | null;
+      home_hero_title: string | null;
+      home_hero_description: string | null;
+      home_hero_banner_url: string | null;
+      home_hero_banner_gallery_urls: string | null;
+      footer_description: string | null;
+      home_meta_title: string | null;
+      home_meta_description: string | null;
+      social_image_url: string | null;
+    }>();
+
+  if (!record) {
+    return defaults;
+  }
+
+  return {
+    siteName: truncateText(record.site_name, 120) || defaults.siteName,
+    supportEmail: truncateText(record.support_email, 160) || defaults.supportEmail,
+    logoUrl: normalizeOptionalUrl(record.logo_url),
+    faviconUrl: normalizeOptionalUrl(record.favicon_url),
+    homeHeroTitle: truncateText(record.home_hero_title, 180) || defaults.homeHeroTitle,
+    homeHeroDescription: truncateText(record.home_hero_description, 400) || defaults.homeHeroDescription,
+    homeHeroBannerUrl: normalizeOptionalUrl(record.home_hero_banner_url),
+    homeHeroBannerGalleryUrls: truncateText(record.home_hero_banner_gallery_urls, 4000),
+    footerDescription: truncateText(record.footer_description, 260) || defaults.footerDescription,
+    homeMetaTitle: truncateText(record.home_meta_title, 180) || defaults.homeMetaTitle,
+    homeMetaDescription: truncateText(record.home_meta_description, 320) || defaults.homeMetaDescription,
+    socialImageUrl: normalizeOptionalUrl(record.social_image_url),
+  };
+};
+
+const saveSiteSettings = async (db: D1Database, env: Bindings, payload: Record<string, unknown>) => {
+  await ensureSiteSettingsSchema(db);
+  const defaults = getDefaultSiteSettings(env);
+  const settings: SiteSettings = {
+    siteName: truncateText(payload.siteName, 120) || defaults.siteName,
+    supportEmail: truncateText(payload.supportEmail, 160) || defaults.supportEmail,
+    logoUrl: normalizeOptionalUrl(payload.logoUrl),
+    faviconUrl: normalizeOptionalUrl(payload.faviconUrl),
+    homeHeroTitle: truncateText(payload.homeHeroTitle, 180) || defaults.homeHeroTitle,
+    homeHeroDescription: truncateText(payload.homeHeroDescription, 400) || defaults.homeHeroDescription,
+    homeHeroBannerUrl: normalizeOptionalUrl(payload.homeHeroBannerUrl),
+    homeHeroBannerGalleryUrls: truncateText(payload.homeHeroBannerGalleryUrls, 4000),
+    footerDescription: truncateText(payload.footerDescription, 260) || defaults.footerDescription,
+    homeMetaTitle: truncateText(payload.homeMetaTitle, 180) || defaults.homeMetaTitle,
+    homeMetaDescription: truncateText(payload.homeMetaDescription, 320) || defaults.homeMetaDescription,
+    socialImageUrl: normalizeOptionalUrl(payload.socialImageUrl),
+  };
+  const now = new Date().toISOString();
+
+  await db
+    .prepare(
+      `INSERT INTO site_settings (
+         id, site_name, support_email, logo_url, favicon_url,
+         home_hero_title, home_hero_description, home_hero_banner_url, home_hero_banner_gallery_urls,
+         footer_description, home_meta_title, home_meta_description,
+         social_image_url, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         site_name = excluded.site_name,
+         support_email = excluded.support_email,
+         logo_url = excluded.logo_url,
+         favicon_url = excluded.favicon_url,
+         home_hero_title = excluded.home_hero_title,
+         home_hero_description = excluded.home_hero_description,
+         home_hero_banner_url = excluded.home_hero_banner_url,
+         home_hero_banner_gallery_urls = excluded.home_hero_banner_gallery_urls,
+         footer_description = excluded.footer_description,
+         home_meta_title = excluded.home_meta_title,
+         home_meta_description = excluded.home_meta_description,
+         social_image_url = excluded.social_image_url,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(
+      'default',
+      settings.siteName,
+      settings.supportEmail,
+      settings.logoUrl || null,
+      settings.faviconUrl || null,
+      settings.homeHeroTitle,
+      settings.homeHeroDescription,
+      settings.homeHeroBannerUrl || null,
+      settings.homeHeroBannerGalleryUrls || null,
+      settings.footerDescription,
+      settings.homeMetaTitle,
+      settings.homeMetaDescription,
+      settings.socialImageUrl || null,
+      now,
+    )
+    .run();
+
+  return settings;
+};
+
+const getPageContext = async (env: Bindings) => getContext(env, env.DB ? await loadSiteSettings(env.DB, env) : getDefaultSiteSettings(env));
 
 const isTruthyFlag = (value: string | undefined | null) => {
   const normalized = toText(value).toLowerCase();
@@ -410,8 +841,7 @@ const formatDateTimeDisplay = (value: string | null | undefined) =>
       })
     : '';
 
-const getDayPassDiscount = (days: number) =>
-  DAY_PASS_DISCOUNT_TIERS.find((tier) => days >= tier.min && days <= tier.max) ?? { rate: 0 };
+const getDayPassDiscount = (_days: number) => ({ rate: 0 });
 
 const getPlanAmountUsd = (plan: Plan, periodNum: number | null) => {
   if (!plan.periodRequired) {
@@ -455,28 +885,58 @@ const toAmountVnd = (value: unknown) => {
 
 const normalizeReferenceCandidate = (value: string) => toText(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-const extractOrderReference = (...values: string[]) => {
+const extractRouteReference = (prefix: string, ...values: string[]) => {
   for (const value of values) {
     const candidates = [toText(value).toUpperCase(), normalizeReferenceCandidate(value)];
     for (const candidate of candidates) {
-      const match = candidate.match(/ECN([A-Z0-9]{8})/);
+      const match = candidate.match(new RegExp(`${prefix}([A-Z0-9]{8})`));
       if (match?.[1]) {
-        return `ECN-${match[1]}`;
+        return `${prefix}-${match[1]}`;
       }
     }
   }
   return '';
 };
 
-const extractPaymentCode = (...values: string[]) => {
+const extractRoutePaymentCode = (prefix: string, suffixPattern: string, ...values: string[]) => {
   for (const value of values) {
     const candidates = [toText(value).toUpperCase(), normalizeReferenceCandidate(value)];
     for (const candidate of candidates) {
-      const match = candidate.match(/ESIMCN(\d{8})/);
+      const match = candidate.match(new RegExp(`${prefix}(${suffixPattern})`));
       if (match?.[1]) {
-        return `ESIMCN${match[1]}`;
+        return `${prefix}${match[1]}`;
       }
     }
+  }
+  return '';
+};
+
+const extractOrderReference = (...values: string[]) => {
+  return extractRouteReference('ECN', ...values);
+};
+
+const extractPaymentCode = (...values: string[]) => {
+  return extractRoutePaymentCode('ESIMCN', '\\d{8}', ...values);
+};
+
+const extractNtaOrderReference = (...values: string[]) => {
+  for (const value of values) {
+    const candidate = toText(value).toUpperCase();
+    const match = candidate.match(/(?:^|[^A-Z0-9])NTA[-_\s]*([A-Z0-9]{8})(?=$|[^A-Z0-9])/);
+    if (match?.[1]) {
+      return `NTA-${match[1]}`;
+    }
+  }
+  return '';
+};
+const extractNtaPaymentCode = (...values: string[]) => extractRoutePaymentCode('ESIMNTA', '[A-Z0-9]{8}', ...values);
+
+const getWebhookRouteKey = (...values: string[]) => {
+  if (extractOrderReference(...values) || extractPaymentCode(...values)) {
+    return 'esimcn';
+  }
+  if (extractNtaOrderReference(...values) || extractNtaPaymentCode(...values)) {
+    return 'nta';
   }
   return '';
 };
@@ -672,6 +1132,60 @@ const ensurePricingSchema = async (db: D1Database) => {
     )
     .run();
   await db.prepare('CREATE INDEX IF NOT EXISTS pricing_overrides_updated_at_idx ON pricing_overrides(updated_at DESC)').run();
+};
+
+const ensureSiteSettingsSchema = async (db: D1Database) => {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS site_settings (
+        id TEXT PRIMARY KEY,
+        site_name TEXT,
+        support_email TEXT,
+        logo_url TEXT,
+        favicon_url TEXT,
+        home_hero_title TEXT,
+        home_hero_description TEXT,
+        home_hero_banner_url TEXT,
+        home_hero_banner_gallery_urls TEXT,
+        footer_description TEXT,
+        home_meta_title TEXT,
+        home_meta_description TEXT,
+        social_image_url TEXT,
+        updated_at TEXT NOT NULL
+      )`,
+    )
+    .run();
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN site_name TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN support_email TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN logo_url TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN favicon_url TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN home_hero_title TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN home_hero_description TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN home_hero_banner_url TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN home_hero_banner_gallery_urls TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN footer_description TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN home_meta_title TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN home_meta_description TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN social_image_url TEXT');
+  await addColumnIfMissing(db, 'ALTER TABLE site_settings ADD COLUMN updated_at TEXT');
+};
+
+const ensureSiteAssetsSchema = async (db: D1Database) => {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS site_assets (
+        asset_key TEXT PRIMARY KEY,
+        field TEXT NOT NULL,
+        filename TEXT,
+        content_type TEXT NOT NULL,
+        content BLOB NOT NULL,
+        size INTEGER NOT NULL,
+        uploaded_by TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    )
+    .run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS site_assets_field_idx ON site_assets(field, created_at DESC)').run();
 };
 
 const ensureAdminSessionSchema = async (db: D1Database) => {
@@ -1472,7 +1986,7 @@ const createEsimAccessOrder = async (env: Bindings, order: StoredOrder) => {
   const transactionId = order.access_transaction_id?.trim() || order.id;
   const packageInfo: Record<string, unknown> = {
     packageCode: order.package_code,
-    count: 1,
+    count: clampOrderQuantity(order.quantity),
   };
 
   if (typeof order.period_num === 'number' && Number.isFinite(order.period_num) && order.period_num > 0) {
@@ -1494,34 +2008,37 @@ const createEsimAccessOrder = async (env: Bindings, order: StoredOrder) => {
   };
 };
 
-const queryEsimAccessProfiles = async (env: Bindings, orderNo: string) => {
+const queryEsimAccessProfiles = async (env: Bindings, orderNo: string, expectedCount = 1) => {
+  const pageSize = Math.max(20, Math.min(100, clampOrderQuantity(expectedCount)));
   const payload = await postEsimAccess<EsimAccessQueryResponse>(env, '/api/v1/open/esim/query', {
     orderNo,
     iccid: '',
     pager: {
       pageNum: 1,
-      pageSize: 20,
+      pageSize,
     },
   });
 
-  if (payload.success && payload.obj?.esimList && payload.obj.esimList.length > 0) {
+  const profiles = dedupeEsimProfiles(payload.obj?.esimList ?? []).filter((profile) => hasReadyEsimProfile(profile));
+
+  if (payload.success && profiles.length >= clampOrderQuantity(expectedCount)) {
     return {
       status: 'ready' as const,
-      profile: payload.obj.esimList[0] ?? null,
+      profiles: profiles.slice(0, clampOrderQuantity(expectedCount)),
     };
   }
 
   if (payload.errorCode === '200010') {
     return {
       status: 'pending' as const,
-      profile: null,
+      profiles: [],
     };
   }
 
-  if (payload.success && (!payload.obj?.esimList || payload.obj.esimList.length === 0)) {
+  if (payload.success) {
     return {
       status: 'pending' as const,
-      profile: null,
+      profiles,
     };
   }
 
@@ -1647,13 +2164,15 @@ const sendEsimReadyEmail = async (
     planTitle: string;
     amountVnd: number;
     paidAt: string;
-    qrCodeUrl: string;
-    shortUrl: string;
-    activationCode: string;
-    iccid: string;
-    apn: string;
-    pin: string;
-    puk: string;
+    esims: Array<{
+      qrCodeUrl: string;
+      shortUrl: string;
+      activationCode: string;
+      iccid: string;
+      apn: string;
+      pin: string;
+      puk: string;
+    }>;
     topUpSupported?: boolean;
   },
 ) => {
@@ -1668,6 +2187,12 @@ const sendEsimReadyEmail = async (
     return { status: 'skipped', error: 'missing_resend_api_key' } as const;
   }
 
+  const esimCount = Math.max(1, delivery.esims.length);
+  const primaryEsim = delivery.esims[0];
+  if (!primaryEsim?.qrCodeUrl) {
+    return { status: 'skipped', error: 'missing_qr_code' } as const;
+  }
+
   const amountLabel = `${moneyVnd.format(delivery.amountVnd)}đ`;
   const paidLabel = new Date(delivery.paidAt).toLocaleString('vi-VN', {
     dateStyle: 'short',
@@ -1675,21 +2200,21 @@ const sendEsimReadyEmail = async (
   });
   const successUrl = `${(env.SITE_URL || `https://${brand.domain}`).replace(/\/$/, '')}${buildPaymentSuccessPath(delivery.reference, delivery.accessToken)}`;
   const portalUrl = `${(env.SITE_URL || `https://${brand.domain}`).replace(/\/$/, '')}/tra-cuu-don`;
-  const appleInstallUrl = buildAppleEsimInstallUrl(delivery.activationCode);
-  const androidInstallUrl = buildAndroidEsimInstallUrl(delivery.activationCode);
-  const subject = `${delivery.planTitle} | QR eSIM đã sẵn sàng`;
+  const appleInstallUrl = buildAppleEsimInstallUrl(primaryEsim.activationCode);
+  const androidInstallUrl = buildAndroidEsimInstallUrl(primaryEsim.activationCode);
+  const subject = `${delivery.planTitle} | ${esimCount > 1 ? `${esimCount} QR eSIM` : 'QR eSIM'} đã sẵn sàng`;
   const safeReference = escapeHtml(delivery.reference);
   const safeFullName = escapeHtml(delivery.fullName);
   const safePlanTitle = escapeHtml(delivery.planTitle);
   const safePaidLabel = escapeHtml(paidLabel);
   const safeAmountLabel = escapeHtml(amountLabel);
-  const safeQrCodeUrl = escapeHtml(delivery.qrCodeUrl);
-  const safeShortUrl = escapeHtml(delivery.shortUrl);
-  const safeActivationCode = escapeHtml(delivery.activationCode);
-  const safeIccid = escapeHtml(delivery.iccid);
-  const safeApn = escapeHtml(delivery.apn || 'Tự động');
-  const safePin = escapeHtml(delivery.pin || '-');
-  const safePuk = escapeHtml(delivery.puk || '-');
+  const safeQrCodeUrl = escapeHtml(primaryEsim.qrCodeUrl);
+  const safeShortUrl = escapeHtml(primaryEsim.shortUrl);
+  const safeActivationCode = escapeHtml(primaryEsim.activationCode);
+  const safeIccid = escapeHtml(primaryEsim.iccid);
+  const safeApn = escapeHtml(primaryEsim.apn || 'Tự động');
+  const safePin = escapeHtml(primaryEsim.pin || '-');
+  const safePuk = escapeHtml(primaryEsim.puk || '-');
   const safeSuccessUrl = escapeHtml(successUrl);
   const safePortalUrl = escapeHtml(portalUrl);
   const safeAppleInstallUrl = escapeHtml(appleInstallUrl);
@@ -1699,8 +2224,8 @@ const sendEsimReadyEmail = async (
       <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #f3d9d2;border-radius:28px;overflow:hidden">
         <div style="padding:20px 24px;background:#ffffff;border-bottom:4px solid #ef5c48">
           <div style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#ef5c48;margin-bottom:8px">eSIM CN</div>
-          <div style="font-size:28px;line-height:1.22;font-weight:800;color:#201614;margin-bottom:10px">QR eSIM của anh đã sẵn sàng</div>
-          <div style="font-size:15px;line-height:1.7;color:#654f49">Đơn <strong>${safeReference}</strong> đã được cấp eSIM thật. Anh có thể quét QR, mở link cài đặt hoặc dùng mã kích hoạt bên dưới.</div>
+          <div style="font-size:28px;line-height:1.22;font-weight:800;color:#201614;margin-bottom:10px">${esimCount > 1 ? `${esimCount} QR eSIM của anh đã sẵn sàng` : 'QR eSIM của anh đã sẵn sàng'}</div>
+          <div style="font-size:15px;line-height:1.7;color:#654f49">Đơn <strong>${safeReference}</strong> đã được cấp eSIM thật. ${esimCount > 1 ? `Trang đơn đang hiển thị đủ <strong>${esimCount} QR</strong>; email này để sẵn QR đầu tiên để anh vào cài nhanh.` : 'Anh có thể quét QR, mở link cài đặt hoặc dùng mã kích hoạt bên dưới.'}</div>
         </div>
         <div style="padding:24px">
           <div style="margin-bottom:18px;padding:18px 20px;border:1px solid #f2d9d2;border-radius:22px;background:#ffffff">
@@ -1714,11 +2239,11 @@ const sendEsimReadyEmail = async (
                 <div style="font-size:24px;font-weight:800;color:#201614">${safeAmountLabel}</div>
               </div>
             </div>
-            <div style="margin-top:14px;font-size:14px;line-height:1.7;color:#654f49">Khách hàng: <strong style="color:#201614">${safeFullName}</strong><br/>Gói: <strong style="color:#201614">${safePlanTitle}</strong><br/>Thanh toán lúc: <strong style="color:#201614">${safePaidLabel}</strong></div>
+            <div style="margin-top:14px;font-size:14px;line-height:1.7;color:#654f49">Khách hàng: <strong style="color:#201614">${safeFullName}</strong><br/>Gói: <strong style="color:#201614">${safePlanTitle}</strong><br/>Số eSIM: <strong style="color:#201614">${esimCount}</strong><br/>Thanh toán lúc: <strong style="color:#201614">${safePaidLabel}</strong></div>
           </div>
           <div style="margin-bottom:18px;padding:18px 20px;border:1px solid #f2d9d2;border-radius:22px;background:#fffdfd;text-align:center">
             <img src="${safeQrCodeUrl}" alt="QR eSIM ${safeReference}" style="display:block;width:min(100%,280px);margin:0 auto 16px;border-radius:20px;border:1px solid #f0dfd8;background:#fff" />
-            <div style="font-size:13px;line-height:1.7;color:#654f49">Quét QR để cài eSIM hoặc mở link cài đặt trực tiếp.</div>
+            <div style="font-size:13px;line-height:1.7;color:#654f49">${esimCount > 1 ? 'Đây là QR đầu tiên trong đơn. Mở trang đơn để xem đầy đủ tất cả QR và mã cài đặt.' : 'Quét QR để cài eSIM hoặc mở link cài đặt trực tiếp.'}</div>
           </div>
           <div style="margin-bottom:18px;border:1px solid #f2d9d2;border-radius:22px;background:#fffdfd;overflow:hidden">
             <div style="padding:14px 20px;background:#fff3ef;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ef5c48">Thông tin eSIM thật</div>
@@ -1731,7 +2256,7 @@ const sendEsimReadyEmail = async (
             </div>
           </div>
           <div style="margin-bottom:18px;padding:16px 18px;border:1px solid #f2d9d2;border-radius:20px;background:#fff8f5;font-size:14px;line-height:1.7;color:#654f49">
-            Trên <a href="${safeSuccessUrl}" style="color:#ef5c48;font-weight:800;text-decoration:none">trang đơn</a>, anh có thể <strong style="color:#201614">kiểm tra dung lượng còn lại</strong>${delivery.topUpSupported ? ' và <strong style="color:#201614">xem các gói nạp thêm</strong>' : ''}.
+            Trên <a href="${safeSuccessUrl}" style="color:#ef5c48;font-weight:800;text-decoration:none">trang đơn</a>, anh có thể ${esimCount > 1 ? `<strong style="color:#201614">xem đủ ${esimCount} QR eSIM</strong> và mã cài đặt tương ứng của từng máy` : `<strong style="color:#201614">kiểm tra dung lượng còn lại</strong>${delivery.topUpSupported ? ' và <strong style="color:#201614">xem các gói nạp thêm</strong>' : ''}`}.
           </div>
           <div style="margin-bottom:18px;padding:16px 18px;border:1px solid #f2d9d2;border-radius:20px;background:#ffffff;font-size:14px;line-height:1.7;color:#654f49">
             Nếu sau này không còn link này, anh chỉ cần vào <a href="${safePortalUrl}" style="color:#ef5c48;font-weight:800;text-decoration:none">Đơn của tôi</a> và nhập email + 4 số cuối số điện thoại để nhận lại link đăng nhập. Không cần nhớ mật khẩu.
@@ -1750,17 +2275,18 @@ const sendEsimReadyEmail = async (
     'QR eSIM da san sang',
     `Ma don: ${delivery.reference}`,
     `Goi: ${delivery.planTitle}`,
+    `So eSIM: ${esimCount}`,
     `So tien: ${amountLabel}`,
     `Thanh toan luc: ${paidLabel}`,
     `Cai tren iPhone: ${appleInstallUrl}`,
     `Cai tren Android: ${androidInstallUrl}`,
-    `Link cai dat: ${delivery.shortUrl}`,
-    `Ma kich hoat: ${delivery.activationCode}`,
-    `ICCID: ${delivery.iccid}`,
-    `APN: ${delivery.apn || 'Tu dong'}`,
-    `Ma PIN / PUK cai dat: ${delivery.pin || '-'} / ${delivery.puk || '-'}`,
+    `Link cai dat: ${primaryEsim.shortUrl}`,
+    `Ma kich hoat: ${primaryEsim.activationCode}`,
+    `ICCID: ${primaryEsim.iccid}`,
+    `APN: ${primaryEsim.apn || 'Tu dong'}`,
+    `Ma PIN / PUK cai dat: ${primaryEsim.pin || '-'} / ${primaryEsim.puk || '-'}`,
     `Trang don: ${successUrl}`,
-    `Kiem tra dung luong: ${successUrl}`,
+    esimCount > 1 ? `Xem du ${esimCount} QR trong trang don: ${successUrl}` : `Kiem tra dung luong: ${successUrl}`,
   ].join('\n');
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -1799,7 +2325,9 @@ const provisionPaidOrder = async (env: Bindings, db: D1Database, reference: stri
     return { ready: false, status: 'skipped' as const, order };
   }
 
-  if (order.access_qr_code_url) {
+  const expectedProfiles = clampOrderQuantity(order.quantity);
+  const existingProfiles = parseStoredEsimProfiles(order).filter((profile) => hasReadyEsimProfile(profile));
+  if (existingProfiles.length >= expectedProfiles) {
     return { ready: true, status: 'ready' as const, order };
   }
 
@@ -1830,12 +2358,12 @@ const provisionPaidOrder = async (env: Bindings, db: D1Database, reference: stri
         .run();
     }
 
-    let profile: EsimAccessProfile | null = null;
+    let readyProfiles: EsimAccessProfile[] = [];
     const maxAttempts = createdOrder ? 6 : 2;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const result = await queryEsimAccessProfiles(env, orderNo);
-      if (result.status === 'ready' && result.profile?.qrCodeUrl) {
-        profile = result.profile;
+      const result = await queryEsimAccessProfiles(env, orderNo, expectedProfiles);
+      if (result.status === 'ready' && result.profiles.length >= expectedProfiles) {
+        readyProfiles = result.profiles.slice(0, expectedProfiles);
         break;
       }
       if (attempt < maxAttempts - 1) {
@@ -1843,7 +2371,7 @@ const provisionPaidOrder = async (env: Bindings, db: D1Database, reference: stri
       }
     }
 
-    if (!profile?.qrCodeUrl) {
+    if (readyProfiles.length < expectedProfiles) {
       await db
         .prepare(
           `UPDATE orders
@@ -1855,6 +2383,8 @@ const provisionPaidOrder = async (env: Bindings, db: D1Database, reference: stri
       const pendingOrder = await getStoredOrder(db, reference);
       return { ready: false, status: 'pending_resource' as const, order: pendingOrder };
     }
+
+    const primaryProfile = readyProfiles[0];
 
     await db
       .prepare(
@@ -1870,20 +2400,20 @@ const provisionPaidOrder = async (env: Bindings, db: D1Database, reference: stri
         'GOT_RESOURCE',
         'ready',
         new Date().toISOString(),
-        profile.esimTranNo ?? null,
-        profile.iccid ?? null,
-        profile.ac ?? null,
-        profile.qrCodeUrl ?? null,
-        profile.shortUrl ?? null,
-        profile.smdpStatus ?? null,
-        profile.eid ?? null,
-        profile.apn ?? null,
-        profile.pin ?? null,
-        profile.puk ?? null,
-        profile.activateTime ?? null,
-        profile.installationTime ?? null,
-        profile.expiredTime ?? null,
-        JSON.stringify(profile),
+        primaryProfile?.esimTranNo ?? null,
+        primaryProfile?.iccid ?? null,
+        primaryProfile?.ac ?? null,
+        primaryProfile?.qrCodeUrl ?? null,
+        primaryProfile?.shortUrl ?? null,
+        primaryProfile?.smdpStatus ?? null,
+        primaryProfile?.eid ?? null,
+        primaryProfile?.apn ?? null,
+        primaryProfile?.pin ?? null,
+        primaryProfile?.puk ?? null,
+        primaryProfile?.activateTime ?? null,
+        primaryProfile?.installationTime ?? null,
+        primaryProfile?.expiredTime ?? null,
+        serializeStoredEsimProfiles(orderNo, order.access_transaction_id?.trim() || order.id, readyProfiles),
         reference,
       )
       .run();
@@ -1897,34 +2427,40 @@ const provisionPaidOrder = async (env: Bindings, db: D1Database, reference: stri
       !freshOrder.access_esim_email_sent_at
     ) {
       try {
-        const catalog = await loadCatalog(env);
+        const readyEmailProfiles = parseStoredEsimProfiles(freshOrder).filter((profile) => hasReadyEsimProfile(profile));
+        const primaryEmailProfile = readyEmailProfiles[0];
+        const catalog = await loadCatalog(env, { skipRemote: true });
         const matchedPlan = catalog.plans.find((item) => item.slug === freshOrder.plan_slug) ?? null;
-        const mailState = await sendEsimReadyEmail(env, {
-          reference: freshOrder.id,
-          accessToken: freshOrder.access_token ?? '',
-          fullName: freshOrder.full_name,
-          email: freshOrder.email,
-          planTitle:
-            freshOrder.period_num && freshOrder.period_num > 0
-              ? `${freshOrder.plan_name ?? freshOrder.plan_slug} · ${freshOrder.period_num} ngày`
-              : freshOrder.plan_name ?? freshOrder.plan_slug,
-          amountVnd: freshOrder.amount_vnd ?? 0,
-          paidAt: freshOrder.paid_at ?? freshOrder.created_at,
-          qrCodeUrl: freshOrder.access_qr_code_url,
-          shortUrl: freshOrder.access_short_url ?? freshOrder.access_qr_code_url,
-          activationCode: freshOrder.access_ac ?? '',
-          iccid: freshOrder.access_iccid ?? '',
-          apn: freshOrder.access_apn ?? '',
-          pin: freshOrder.access_pin ?? '',
-          puk: freshOrder.access_puk ?? '',
-          topUpSupported: matchedPlan?.supportTopUpType === 2,
-        });
-        await updateEsimEmailState(db, reference, {
-          status: mailState.status,
-          sentAt: 'sentAt' in mailState ? mailState.sentAt : null,
-          emailId: 'emailId' in mailState ? mailState.emailId : null,
-          error: 'error' in mailState ? mailState.error : null,
-        });
+        if (primaryEmailProfile) {
+          const mailState = await sendEsimReadyEmail(env, {
+            reference: freshOrder.id,
+            accessToken: freshOrder.access_token ?? '',
+            fullName: freshOrder.full_name,
+            email: freshOrder.email,
+            planTitle:
+              freshOrder.period_num && freshOrder.period_num > 0
+                ? `${freshOrder.plan_name ?? freshOrder.plan_slug} · ${freshOrder.period_num} ngày`
+                : freshOrder.plan_name ?? freshOrder.plan_slug,
+            amountVnd: freshOrder.amount_vnd ?? 0,
+            paidAt: freshOrder.paid_at ?? freshOrder.created_at,
+            esims: readyEmailProfiles.map((profile) => ({
+              qrCodeUrl: profile.qrCodeUrl ?? '',
+              shortUrl: profile.shortUrl ?? profile.qrCodeUrl ?? '',
+              activationCode: profile.ac ?? '',
+              iccid: profile.iccid ?? '',
+              apn: profile.apn ?? '',
+              pin: profile.pin ?? '',
+              puk: profile.puk ?? '',
+            })),
+            topUpSupported: matchedPlan?.supportTopUpType === 2,
+          });
+          await updateEsimEmailState(db, reference, {
+            status: mailState.status,
+            sentAt: 'sentAt' in mailState ? mailState.sentAt : null,
+            emailId: 'emailId' in mailState ? mailState.emailId : null,
+            error: 'error' in mailState ? mailState.error : null,
+          });
+        }
       } catch (error) {
         await updateEsimEmailState(db, reference, {
           status: 'failed',
@@ -2111,7 +2647,7 @@ const sendOrderPaymentSuccessEmailIfNeeded = async (
   }
 
   try {
-    const catalog = await loadCatalog(env);
+    const catalog = await loadCatalog(env, { skipRemote: true });
     const matchedPlan = catalog.plans.find((plan) => plan.slug === order.plan_slug) ?? null;
     const amountVnd =
       typeof options.amountVnd === 'number' && Number.isFinite(options.amountVnd) && options.amountVnd > 0
@@ -2168,19 +2704,21 @@ const sendOrderPaymentSuccessEmailIfNeeded = async (
 
 const loadCatalog = async (
   env: Bindings,
-  options: { includeSourcePrices?: boolean } = {},
+  options: { includeSourcePrices?: boolean; skipRemote?: boolean } = {},
 ): Promise<{ plans: Plan[]; source: 'static' | 'esimaccess' }> => {
   let source: 'static' | 'esimaccess' = 'static';
   let catalogPlans = plans;
 
-  try {
-    const dynamicPlans = await fetchEsimAccessPlans(env.ESIM_ACCESS_CODE);
-    if (dynamicPlans && dynamicPlans.length > 0) {
-      catalogPlans = dynamicPlans;
-      source = 'esimaccess';
+  if (!options.skipRemote) {
+    try {
+      const dynamicPlans = await fetchEsimAccessPlans(env.ESIM_ACCESS_CODE);
+      if (dynamicPlans && dynamicPlans.length > 0) {
+        catalogPlans = dynamicPlans;
+        source = 'esimaccess';
+      }
+    } catch (error) {
+      console.error('Unable to load eSIMAccess catalog', error);
     }
-  } catch (error) {
-    console.error('Unable to load eSIMAccess catalog', error);
   }
 
   const overrides = await loadPricingOverrides(env.DB);
@@ -2323,7 +2861,59 @@ const getOrderStatusLabel = (status: string | null) =>
   status === 'paid' ? 'Đã thanh toán' : status === 'pending_review' ? 'Đang chờ đối soát' : 'Chờ thanh toán';
 
 const getWebhookStatusLabel = (status: string | null) =>
-  status === 'matched' ? 'Đã match đơn' : status === 'ignored' ? 'Bỏ qua' : 'Khác';
+  status === 'matched'
+    ? 'Đã match đơn'
+    : status === 'forwarded'
+      ? 'Đã chuyển web2'
+      : status === 'ignored'
+        ? 'Bỏ qua'
+        : 'Khác';
+
+const forwardPaymentWebhook = async (
+  env: Bindings,
+  payload: unknown,
+  routeKey: 'nta',
+  metadata: {
+    description: string;
+    refNo: string;
+    amountVnd: number;
+    accountNumber: string;
+    matchedReference: string;
+  },
+) => {
+  const targetUrl = routeKey === 'nta' ? toText(env.PAYMENT_FORWARD_NTA_URL).trim() : '';
+  const sharedSecret = routeKey === 'nta' ? toText(env.PAYMENT_FORWARD_NTA_SECRET).trim() : '';
+  if (!targetUrl || !sharedSecret) {
+    return { ok: false, error: 'forward_target_missing', status: 503 };
+  }
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-webhook-secret': sharedSecret,
+        'x-origin-webhook-route': routeKey,
+      },
+      body: JSON.stringify({
+        payload,
+        metadata,
+      }),
+    });
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: text,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 502,
+      error: error instanceof Error ? error.message : 'forward_failed',
+    };
+  }
+};
 
 const loadCustomerPortalOrders = async (db: D1Database, email: string, phoneLast4: string) => {
   const candidates = await db.prepare(ORDER_LOOKUP_BY_EMAIL_SQL).bind(email).all<StoredOrder>();
@@ -2433,6 +3023,13 @@ const getAdminFlash = (request: Request) => {
     } as const;
   }
 
+  if (flash === 'site_settings_saved') {
+    return {
+      kind: 'success',
+      message: 'Đã lưu Site Settings. Hero, logo, footer và metadata public đã cập nhật.',
+    } as const;
+  }
+
   if (flash === 'manual_paid') {
     return {
       kind: 'success',
@@ -2478,6 +3075,7 @@ const getAdminFlash = (request: Request) => {
 };
 
 const requireAdminSession = async (c: Context<{ Bindings: Bindings }>) => {
+  const context = await getPageContext(c.env);
   const csrf = getOrCreateAdminCsrfToken(c.req.raw);
   if (!c.env.DB) {
     return {
@@ -2486,7 +3084,7 @@ const requireAdminSession = async (c: Context<{ Bindings: Bindings }>) => {
         ? appendAdminCsrfCookie(
             c.req.raw,
             c.html(
-        renderAdminLoginPage(getContext(c.env), {
+        renderAdminLoginPage(context, {
           username: getAdminUsername(c.env),
           enabled: false,
           csrfToken: csrf.token,
@@ -2500,7 +3098,7 @@ const requireAdminSession = async (c: Context<{ Bindings: Bindings }>) => {
             csrf.token,
           )
         : c.html(
-            renderAdminLoginPage(getContext(c.env), {
+            renderAdminLoginPage(context, {
               username: getAdminUsername(c.env),
               enabled: false,
               csrfToken: csrf.token,
@@ -2521,7 +3119,7 @@ const requireAdminSession = async (c: Context<{ Bindings: Bindings }>) => {
         ? appendAdminCsrfCookie(
             c.req.raw,
             c.html(
-        renderAdminLoginPage(getContext(c.env), {
+        renderAdminLoginPage(context, {
           username: getAdminUsername(c.env),
           enabled: false,
           csrfToken: csrf.token,
@@ -2535,7 +3133,7 @@ const requireAdminSession = async (c: Context<{ Bindings: Bindings }>) => {
             csrf.token,
           )
         : c.html(
-            renderAdminLoginPage(getContext(c.env), {
+            renderAdminLoginPage(context, {
               username: getAdminUsername(c.env),
               enabled: false,
               csrfToken: csrf.token,
@@ -2564,13 +3162,14 @@ const requireAdminSession = async (c: Context<{ Bindings: Bindings }>) => {
 };
 
 app.get('/admin/login', async (c) => {
+  const context = await getPageContext(c.env);
   const username = getAdminUsername(c.env);
   const flash = getAdminFlash(c.req.raw);
   const csrf = getOrCreateAdminCsrfToken(c.req.raw);
 
   if (!c.env.DB || !hasAdminPassword(c.env)) {
     const response = c.html(
-      renderAdminLoginPage(getContext(c.env), {
+      renderAdminLoginPage(context, {
         username,
         enabled: false,
         csrfToken: csrf.token,
@@ -2597,7 +3196,7 @@ app.get('/admin/login', async (c) => {
   }
 
   const response = c.html(
-    renderAdminLoginPage(getContext(c.env), {
+    renderAdminLoginPage(context, {
       username,
       enabled: true,
       csrfToken: csrf.token,
@@ -2608,10 +3207,11 @@ app.get('/admin/login', async (c) => {
 });
 
 app.post('/admin/login', async (c) => {
+  const context = await getPageContext(c.env);
   const username = getAdminUsername(c.env);
   if (!c.env.DB || !hasAdminPassword(c.env)) {
     return c.html(
-      renderAdminLoginPage(getContext(c.env), {
+      renderAdminLoginPage(context, {
         username,
         enabled: false,
         csrfToken: getOrCreateAdminCsrfToken(c.req.raw).token,
@@ -2633,7 +3233,7 @@ app.post('/admin/login', async (c) => {
   const blockedUntil = await getAdminLoginBlock(c.env.DB, clientIp);
   if (blockedUntil) {
     return c.html(
-      renderAdminLoginPage(getContext(c.env), {
+      renderAdminLoginPage(context, {
         username,
         enabled: true,
         csrfToken: getAdminCsrfCookie(c.req.raw),
@@ -2652,7 +3252,7 @@ app.post('/admin/login', async (c) => {
   if (submittedUsername !== username || submittedPassword !== (c.env.ADMIN_PASSWORD?.trim() || '')) {
     await recordAdminLoginFailure(c.env.DB, clientIp);
     return c.html(
-      renderAdminLoginPage(getContext(c.env), {
+      renderAdminLoginPage(context, {
         username,
         enabled: true,
         csrfToken: getAdminCsrfCookie(c.req.raw),
@@ -2721,8 +3321,10 @@ app.get('/admin', async (c) => {
     return auth.response;
   }
 
-  await Promise.all([ensureOrderSchema(c.env.DB!), ensurePricingSchema(c.env.DB!), ensureAdminSessionSchema(c.env.DB!)]);
+  await Promise.all([ensureOrderSchema(c.env.DB!), ensurePricingSchema(c.env.DB!), ensureAdminSessionSchema(c.env.DB!), ensureSiteSettingsSchema(c.env.DB!)]);
   const catalog = await loadCatalog(c.env, { includeSourcePrices: true });
+  const siteSettings = await loadSiteSettings(c.env.DB!, c.env);
+  const context = getContext(c.env, siteSettings);
   const flash = getAdminFlash(c.req.raw);
   const csrf = getOrCreateAdminCsrfToken(c.req.raw);
   const bulkScope = getAdminScopeMeta(toText(c.req.query('scope')) || 'all').key;
@@ -2922,7 +3524,7 @@ app.get('/admin', async (c) => {
   });
 
   const response = c.html(
-    renderAdminDashboardPage(getContext(c.env), {
+    renderAdminDashboardPage(context, {
       username: auth.session.username,
       csrfToken: csrf.token,
       catalogSourceLabel: catalog.source === 'esimaccess' ? 'Live eSIMAccess' : 'Catalog tĩnh dự phòng',
@@ -2993,6 +3595,10 @@ app.get('/admin', async (c) => {
         refNo: item.ref_no,
         description: item.description,
       })),
+      siteSettings,
+      assetUploadEnabled: Boolean(c.env.DB || c.env.SITE_ASSETS_BUCKET),
+      assetUploadMode: getSiteAssetUploadMode(c.env),
+      assetUploadLimitLabel: c.env.SITE_ASSETS_BUCKET ? '10MB' : '1.9MB',
       flash,
       previewHref: '/?noi-bo=1',
       apiHref: '/api/plans',
@@ -3107,6 +3713,131 @@ app.post('/admin/pricing/bulk', async (c) => {
   return redirectWithFlash('bulk_applied', targets.length);
 });
 
+app.post('/admin/site-settings', async (c) => {
+  const auth = await requireAdminSession(c);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  await ensureSiteSettingsSchema(c.env.DB!);
+  const payload = await parsePayload(c.req.raw);
+  if (!validateAdminCsrf(c.req.raw, payload)) {
+    return c.text('CSRF token không hợp lệ.', 403);
+  }
+
+  await saveSiteSettings(c.env.DB!, c.env, payload);
+  return c.redirect('/admin?flash=site_settings_saved#settings');
+});
+
+app.post('/admin/site-assets/upload', async (c) => {
+  const auth = await requireAdminSession(c);
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const formData = await c.req.raw.formData();
+  const payload = Object.fromEntries(formData.entries());
+  if (!validateAdminCsrf(c.req.raw, payload)) {
+    return c.json({ error: 'CSRF token không hợp lệ.' }, 403);
+  }
+
+  const kind = toText(payload.kind);
+  if (!isSiteAssetField(kind)) {
+    return c.json({ error: 'Loại asset không hợp lệ.' }, 400);
+  }
+
+  const fileEntry = formData.get('file') as File | string | null;
+  if (!fileEntry || typeof fileEntry === 'string' || fileEntry.size <= 0) {
+    return c.json({ error: 'Cần chọn một file ảnh hợp lệ.' }, 400);
+  }
+  const file = fileEntry;
+
+  const maxBytes = getSiteAssetMaxBytes(c.env);
+  if (file.size > maxBytes) {
+    return c.json(
+      {
+        error: c.env.SITE_ASSETS_BUCKET
+          ? `Ảnh/GIF quá lớn. Giới hạn hiện tại khi lưu qua Cloudflare R2 là khoảng ${Math.round(maxBytes / MB)}MB.`
+          : 'Ảnh/GIF quá lớn. Vì asset đang lưu trong Cloudflare D1, file cần nhỏ hơn khoảng 1.9MB.',
+      },
+      400,
+    );
+  }
+
+  const contentType = normalizeSiteAssetContentType(file);
+  if (!contentType) {
+    return c.json({ error: 'Định dạng ảnh chưa được hỗ trợ. Hãy dùng PNG, JPG, WebP, AVIF, SVG, GIF hoặc ICO.' }, 400);
+  }
+
+  const key = buildSiteAssetKey(kind, file);
+  const safeFilename = truncateText(file.name, 180) || 'upload';
+
+  if (c.env.SITE_ASSETS_BUCKET) {
+    await c.env.SITE_ASSETS_BUCKET.put(key, await file.arrayBuffer(), {
+      httpMetadata: {
+        contentType,
+        cacheControl: SITE_ASSET_CACHE_CONTROL,
+      },
+      customMetadata: {
+        field: kind,
+        filename: safeFilename,
+        uploadedBy: auth.session.username,
+      },
+    });
+
+    return c.json({
+      ok: true,
+      field: kind,
+      label: SITE_ASSET_KIND_META[kind].label,
+      url: buildSiteAssetPath(key),
+      key,
+      contentType,
+      size: file.size,
+      storage: 'r2',
+    });
+  }
+
+  if (!c.env.DB) {
+    return c.json({ error: 'Worker này chưa bật lưu ảnh trên Cloudflare.' }, 503);
+  }
+
+  await ensureSiteAssetsSchema(c.env.DB);
+  await c.env.DB.prepare(
+    `INSERT OR REPLACE INTO site_assets (
+      asset_key,
+      field,
+      filename,
+      content_type,
+      content,
+      size,
+      uploaded_by,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      key,
+      kind,
+      safeFilename,
+      contentType,
+      await file.arrayBuffer(),
+      file.size,
+      auth.session.username,
+      new Date().toISOString(),
+    )
+    .run();
+
+  return c.json({
+    ok: true,
+    field: kind,
+    label: SITE_ASSET_KIND_META[kind].label,
+    url: buildSiteAssetPath(key),
+    key,
+    contentType,
+    size: file.size,
+    storage: 'd1',
+  });
+});
+
 app.post('/admin/orders/manual-approve', async (c) => {
   const auth = await requireAdminSession(c);
   if (!auth.ok) {
@@ -3201,12 +3932,12 @@ app.get('/', async (c) => {
     internalPricing = Boolean(await getValidAdminSession(c.env.DB, c.req.raw));
   }
   const catalog = await loadCatalog(c.env, { includeSourcePrices: internalPricing });
-  return c.html(renderHomePage(getContext(c.env), catalog.plans, { internalPricing }));
+  return c.html(renderHomePage(await getPageContext(c.env), catalog.plans, { internalPricing }));
 });
 
 app.get('/goi-esim', async (c) => {
   const catalog = await loadCatalog(c.env);
-  return c.html(renderCatalogPage(getContext(c.env), catalog.plans));
+  return c.html(renderCatalogPage(await getPageContext(c.env), catalog.plans));
 });
 
 app.get('/tra-cuu-don', async (c) => {
@@ -3240,10 +3971,10 @@ app.get('/tra-cuu-don', async (c) => {
 
   if (!c.env.DB) {
     search.message = 'Hệ thống tra cứu đơn chưa được bật trên website này.';
-    return c.html(renderOrderLookupPage(getContext(c.env), search, [], magicLink));
+    return c.html(renderOrderLookupPage(await getPageContext(c.env), search, [], magicLink));
   }
 
-  return c.html(renderOrderLookupPage(getContext(c.env), search, [], magicLink));
+  return c.html(renderOrderLookupPage(await getPageContext(c.env), search, [], magicLink));
 });
 
 app.post('/tra-cuu-don/gui-link', async (c) => {
@@ -3334,7 +4065,7 @@ app.get('/don-cua-toi', async (c) => {
   }
 
   const response = c.html(
-    renderCustomerPortalPage(getContext(c.env), {
+    renderCustomerPortalPage(await getPageContext(c.env), {
       email: session.email,
       phoneLast4: session.phone_last4,
       orders,
@@ -3383,7 +4114,7 @@ app.get('/mua-goi', async (c) => {
     return c.redirect(`/mua-goi/${encodeURIComponent(getPlanPublicHandle(matchedPlan))}${query ? `?${query}` : ''}`, 302);
   }
 
-  return c.html(renderCheckoutPage(getContext(c.env), catalog.plans, planSlug, periodNum, quantityNum));
+  return c.html(renderCheckoutPage(await getPageContext(c.env), catalog.plans, planSlug, periodNum, quantityNum));
 });
 
 app.get('/mua-goi/:handle', async (c) => {
@@ -3396,22 +4127,22 @@ app.get('/mua-goi/:handle', async (c) => {
   const matchedPlan = getCheckoutPlanFromRequest(catalog.plans, '', handle);
 
   if (!matchedPlan) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
-  return c.html(renderCheckoutPage(getContext(c.env), catalog.plans, matchedPlan.slug, periodNum, quantityNum));
+  return c.html(renderCheckoutPage(await getPageContext(c.env), catalog.plans, matchedPlan.slug, periodNum, quantityNum));
 });
 
 app.get('/thanh-toan/:reference', async (c) => {
   if (!c.env.DB) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
   await ensureOrderSchema(c.env.DB);
   const order = await getAuthorizedOrder(c.env.DB, c.req.raw, c.req.param('reference'));
 
   if (!order) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
   if (order.payment_status === 'paid') {
@@ -3430,7 +4161,7 @@ app.get('/thanh-toan/:reference', async (c) => {
     : formatVndAmount(amountUsd);
 
   return c.html(
-    renderPaymentPage(getContext(c.env), {
+    renderPaymentPage(await getPageContext(c.env), {
       reference: order.id,
       accessToken: order.access_token ?? '',
       createdAt: order.created_at,
@@ -3459,14 +4190,14 @@ app.get('/thanh-toan/:reference', async (c) => {
 
 app.get('/thanh-toan-thanh-cong/:reference', async (c) => {
   if (!c.env.DB) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
   await ensureOrderSchema(c.env.DB);
   let order = await getAuthorizedOrder(c.env.DB, c.req.raw, c.req.param('reference'));
 
   if (!order) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
   if (order.payment_status !== 'paid') {
@@ -3489,9 +4220,10 @@ app.get('/thanh-toan-thanh-cong/:reference', async (c) => {
     ? order.amount_vnd
     : formatVndAmount(amountUsd);
   const topUpSupported = matchedPlan?.supportTopUpType === 2;
+  const storedProfiles = parseStoredEsimProfiles(order);
 
   return c.html(
-    renderPaymentSuccessPage(getContext(c.env), {
+    renderPaymentSuccessPage(await getPageContext(c.env), {
       reference: order.id,
       accessToken: order.access_token ?? '',
       createdAt: order.created_at,
@@ -3511,22 +4243,21 @@ app.get('/thanh-toan-thanh-cong/:reference', async (c) => {
             ? `${order.period_num} ngày`
             : '',
       amountVnd,
+      quantity: clampOrderQuantity(order.quantity),
       topUpSupported,
       provisioningStatus: order.access_sync_status ?? null,
       provisioningError: order.access_sync_error ?? null,
-      esim: order.access_qr_code_url
-        ? {
-            qrCodeUrl: order.access_qr_code_url,
-            shortUrl: order.access_short_url ?? order.access_qr_code_url,
-            activationCode: order.access_ac ?? '',
-            iccid: order.access_iccid ?? '',
-            apn: order.access_apn ?? '',
-            pin: order.access_pin ?? '',
-            puk: order.access_puk ?? '',
-            smdpStatus: order.access_smdp_status ?? '',
-            eid: order.access_eid ?? '',
-          }
-        : null,
+      esims: storedProfiles.map((profile) => ({
+        qrCodeUrl: profile.qrCodeUrl ?? '',
+        shortUrl: profile.shortUrl ?? profile.qrCodeUrl ?? '',
+        activationCode: profile.ac ?? '',
+        iccid: profile.iccid ?? '',
+        apn: profile.apn ?? '',
+        pin: profile.pin ?? '',
+        puk: profile.puk ?? '',
+        smdpStatus: profile.smdpStatus ?? '',
+        eid: profile.eid ?? '',
+      })),
     }),
   );
 });
@@ -3716,6 +4447,44 @@ app.get('/api/orders/:reference/status', async (c) => {
   });
 });
 
+app.get('/site-assets/*', async (c) => {
+  const key = getSiteAssetKeyFromPath(c.req.path);
+  if (!key) {
+    return c.notFound();
+  }
+
+  if (c.env.SITE_ASSETS_BUCKET) {
+    const object = await c.env.SITE_ASSETS_BUCKET.get(key);
+    if (object?.body) {
+      const headers = new Headers();
+      headers.set('content-type', object.httpMetadata?.contentType || 'application/octet-stream');
+      headers.set('x-content-type-options', 'nosniff');
+      headers.set('cache-control', object.httpMetadata?.cacheControl || SITE_ASSET_CACHE_CONTROL);
+      headers.set('etag', object.httpEtag);
+      return new Response(object.body, { headers });
+    }
+  }
+
+  if (!c.env.DB) {
+    return c.notFound();
+  }
+
+  await ensureSiteAssetsSchema(c.env.DB);
+  const record = await c.env.DB.prepare('SELECT content, content_type FROM site_assets WHERE asset_key = ?')
+    .bind(key)
+    .first<{ content: unknown; content_type: string }>();
+  const body = toSiteAssetBinaryBody(record?.content);
+  if (!record || !body) {
+    return c.notFound();
+  }
+
+  const headers = new Headers();
+  headers.set('content-type', record.content_type || 'application/octet-stream');
+  headers.set('x-content-type-options', 'nosniff');
+  headers.set('cache-control', SITE_ASSET_CACHE_CONTROL);
+  return new Response(body, { headers });
+});
+
 app.post('/api/payment-webhook', async (c) => {
   if (!c.env.DB) {
     return c.json({ ok: false, error: 'Hệ thống chưa bật lưu đơn.' }, 503);
@@ -3742,9 +4511,12 @@ app.post('/api/payment-webhook', async (c) => {
   const amountVnd = toAmountVnd(payload.creditAmount) ?? toAmountVnd(payload.amount);
   const reference = extractOrderReference(description, refNo);
   const paymentCode = extractPaymentCode(description, refNo);
-  const matchedReference = reference || paymentCode;
+  const routeKey = getWebhookRouteKey(description, refNo);
+  const externalReference = routeKey === 'nta' ? extractNtaOrderReference(description, refNo) : '';
+  const externalPaymentCode = routeKey === 'nta' ? extractNtaPaymentCode(description, refNo) : '';
+  const matchedReference = reference || paymentCode || externalReference || externalPaymentCode;
 
-  if ((!reference && !paymentCode) || !amountVnd || amountVnd <= 0) {
+  if ((!reference && !paymentCode && !externalReference && !externalPaymentCode) || !amountVnd || amountVnd <= 0) {
     await recordPaymentWebhookEvent(c.env.DB, payload, {
       refNo,
       description,
@@ -3790,6 +4562,33 @@ app.post('/api/payment-webhook', async (c) => {
       reason: 'account_mismatch',
       reference: matchedReference,
     });
+  }
+
+  if (routeKey === 'nta') {
+    const forwarded = await forwardPaymentWebhook(c.env, payload, 'nta', {
+      description,
+      refNo,
+      amountVnd,
+      accountNumber,
+      matchedReference,
+    });
+    await recordPaymentWebhookEvent(c.env.DB, payload, {
+      refNo,
+      description,
+      amountVnd,
+      accountNumber,
+      matchedReference,
+      matchStatus: forwarded.ok ? 'forwarded' : 'ignored',
+      reason: forwarded.ok ? 'forwarded_to_nta' : forwarded.error || `forward_failed_${forwarded.status}`,
+    });
+    return c.json({
+      ok: forwarded.ok,
+      forwarded: true,
+      route: 'nta',
+      reference: matchedReference,
+      status: forwarded.status,
+      response: forwarded.body ?? forwarded.error ?? null,
+    }, forwarded.ok ? 200 : 502);
   }
 
   const order = reference
@@ -3919,6 +4718,480 @@ app.post('/api/payment-webhook', async (c) => {
   });
 });
 
+
+const normalizeChatText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+
+const truncateChatText = (value: string, maxLength = 1600) => value.slice(0, maxLength).trim();
+
+const ensureChatSchema = async (db: D1Database) => {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        visitor_name TEXT,
+        visitor_phone TEXT,
+        visitor_email TEXT,
+        source TEXT NOT NULL DEFAULT 'website',
+        page_url TEXT,
+        status TEXT NOT NULL DEFAULT 'bot',
+        lead_stage TEXT NOT NULL DEFAULT 'new',
+        handoff_requested INTEGER NOT NULL DEFAULT 0,
+        handoff_reason TEXT,
+        last_intent TEXT,
+        last_message_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS chat_sessions_updated_at_idx ON chat_sessions(updated_at DESC)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS chat_sessions_status_idx ON chat_sessions(status, handoff_requested, updated_at DESC)`).run();
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        body TEXT NOT NULL,
+        intent TEXT,
+        metadata_json TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+      )`,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS chat_messages_session_idx ON chat_messages(session_id, created_at ASC)`).run();
+};
+
+const getChatSessionById = async (db: D1Database, sessionId: string) => {
+  const result = await db
+    .prepare(
+      `SELECT id, visitor_name, visitor_phone, visitor_email, source, page_url, status, lead_stage, handoff_requested, handoff_reason, last_intent, last_message_at, created_at, updated_at
+       FROM chat_sessions
+       WHERE id = ?`,
+    )
+    .bind(sessionId)
+    .first<StoredChatSession>();
+  return result ?? null;
+};
+
+const listChatMessages = async (db: D1Database, sessionId: string) => {
+  const result = await db
+    .prepare(
+      `SELECT id, session_id, role, body, intent, metadata_json, created_at
+       FROM chat_messages
+       WHERE session_id = ?
+       ORDER BY created_at ASC`,
+    )
+    .bind(sessionId)
+    .all<StoredChatMessage>();
+  return result.results ?? [];
+};
+
+const createChatSession = async (db: D1Database, input: { source?: string; pageUrl?: string | null }) => {
+  const now = new Date().toISOString();
+  const sessionId = `chat_${crypto.randomUUID().replaceAll('-', '')}`;
+  await db
+    .prepare(
+      `INSERT INTO chat_sessions (
+        id, source, page_url, status, lead_stage, handoff_requested, last_message_at, created_at, updated_at
+      ) VALUES (?, ?, ?, 'bot', 'new', 0, ?, ?, ?)`,
+    )
+    .bind(sessionId, input.source || 'website', input.pageUrl || null, now, now, now)
+    .run();
+  return (await getChatSessionById(db, sessionId)) as StoredChatSession;
+};
+
+const appendChatMessage = async (
+  db: D1Database,
+  sessionId: string,
+  role: 'user' | 'bot' | 'system',
+  body: string,
+  options: { intent?: string | null; metadata?: Record<string, unknown> | null } = {},
+) => {
+  const createdAt = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO chat_messages (id, session_id, role, body, intent, metadata_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      crypto.randomUUID(),
+      sessionId,
+      role,
+      truncateChatText(body),
+      options.intent ?? null,
+      options.metadata ? JSON.stringify(options.metadata) : null,
+      createdAt,
+    )
+    .run();
+  await db
+    .prepare(
+      `UPDATE chat_sessions
+       SET updated_at = ?, last_message_at = ?, last_intent = COALESCE(?, last_intent)
+       WHERE id = ?`,
+    )
+    .bind(createdAt, createdAt, options.intent ?? null, sessionId)
+    .run();
+};
+
+const buildCatalogRecommendation = (catalogPlans: Plan[], normalizedText: string) => {
+  const mainlandPlans = catalogPlans
+    .filter((plan) => !plan.hiddenFromCatalog && (plan.catalogGroup === 'mainland' || !plan.catalogGroup))
+    .sort((left, right) => left.priceUsd - right.priceUsd);
+  const compactPlan = mainlandPlans.find((plan) => (plan.durationDays ?? 0) <= 7) ?? mainlandPlans[0];
+  const balancedPlan = mainlandPlans.find((plan) => (plan.durationDays ?? 0) >= 10 && (plan.durationDays ?? 0) <= 16) ?? mainlandPlans[1] ?? compactPlan;
+  const heavyPlan = mainlandPlans.find((plan) => (plan.durationDays ?? 0) >= 30) ?? mainlandPlans.at(-1) ?? balancedPlan ?? compactPlan;
+
+  if (/([1-7])\s*ngay/.test(normalizedText) || normalizedText.includes('7 ngay')) {
+    return compactPlan;
+  }
+  if (/([8-9]|1[0-6])\s*ngay/.test(normalizedText) || normalizedText.includes('15 ngay')) {
+    return balancedPlan;
+  }
+  if (/([2-9][0-9])\s*ngay/.test(normalizedText) || normalizedText.includes('30 ngay') || normalizedText.includes('o lau')) {
+    return heavyPlan;
+  }
+
+  if (normalizedText.includes('hotspot') || normalizedText.includes('phat wifi') || normalizedText.includes('nhieu data')) {
+    return heavyPlan;
+  }
+
+  return balancedPlan ?? compactPlan ?? heavyPlan ?? catalogPlans[0];
+};
+
+const extractTripDaysForSales = (message: string, historyMessages: string[] = []) => {
+  const sources = [message, ...historyMessages].map((item) => normalizeChatText(item));
+  for (const source of sources) {
+    const stayMatch = source.match(/\b(\d+)\s*n\s*(\d+)\s*dem\b/);
+    if (stayMatch) {
+      const days = Number(stayMatch[1]);
+      if (days > 0) return days;
+    }
+    const dayMatch = source.match(/\b(\d+)\s*ngay\b/);
+    if (dayMatch) {
+      const days = Number(dayMatch[1]);
+      if (days > 0) return days;
+    }
+  }
+  return null;
+};
+
+const buildChatActionLink = (plan: Plan) => `/mua-goi/${encodeURIComponent(getPlanPublicHandle(plan))}`;
+
+const isRecommendationRequestMessage = (normalizedMessage: string) => {
+  if (/\b\d+\s*ngay\b/.test(normalizedMessage)) {
+    return true;
+  }
+  if (/\b\d+\s*n\s*\d+\s*dem\b/.test(normalizedMessage)) {
+    return true;
+  }
+  return [
+    'goi nao',
+    'mua goi gi',
+    'mua sim gi',
+    'nen dung goi nao',
+    'nen mua goi nao',
+    'tu van goi',
+    'chon goi',
+    'di 2 ngay',
+    'di 3 ngay',
+    'di 1 ngay',
+    '3n2 dem',
+    '2n1 dem',
+  ].some((keyword) => normalizedMessage.includes(keyword));
+};
+
+const buildDeterministicSalesReply = (message: string, historyMessages: string[] = [], catalogPlans: Plan[]) => {
+  const normalizedMessage = normalizeChatText(message);
+  const tripDays = extractTripDaysForSales(message, historyMessages);
+  const visiblePlans = catalogPlans.filter((plan) => !plan.hiddenFromCatalog);
+  const dailyPlans = visiblePlans.filter((plan) => {
+    const dataAllowance = normalizeChatText(plan.dataAllowance || '');
+    const validity = normalizeChatText(plan.validity || '');
+    return /\/ngay/i.test(dataAllowance) || /theo ngay/i.test(validity);
+  });
+
+  const prefer2gbDaily = [...dailyPlans].sort((a, b) => {
+    const score = (plan: Plan) => {
+      const data = normalizeChatText(plan.dataAllowance || '');
+      const ip = normalizeChatText(plan.ipExport || '');
+      const price = Number(String(plan.priceVnd).replace(/[^\d]/g, '')) || 0;
+      let points = 0;
+      if (data.includes('2gb/ngay')) points += 1200;
+      else if (data.includes('3gb/ngay')) points += 900;
+      else if (data.includes('1gb/ngay')) points += 500;
+      if (ip.includes('hk')) points += 120;
+      if (plan.googleAccess) points += 80;
+      points -= price / 1000;
+      return points;
+    };
+    return score(b) - score(a);
+  });
+
+  const backupPack = visiblePlans
+    .filter((plan) => !dailyPlans.includes(plan))
+    .filter((plan) => {
+      const validity = normalizeChatText(plan.validity || '');
+      const data = normalizeChatText(plan.dataAllowance || '');
+      const price = Number(String(plan.priceVnd).replace(/[^\d]/g, '')) || 0;
+      return data.includes('3gb') && /15\s*ngay/i.test(validity) && price >= 100000;
+    })
+    .sort((a, b) => (Number(String(a.priceVnd).replace(/[^\d]/g, '')) || 0) - (Number(String(b.priceVnd).replace(/[^\d]/g, '')) || 0))[0] || null;
+
+  const dailyPlan = prefer2gbDaily[0] || null;
+  const totalPlan = backupPack;
+  const ctaActions = [
+    ...(dailyPlan ? [{ label: 'Mua 2GB/ngày', href: buildChatActionLink(dailyPlan), kind: 'primary' as const }] : []),
+    ...(totalPlan ? [{ label: 'Xem gói tổng', href: buildChatActionLink(totalPlan), kind: 'secondary' as const }] : []),
+  ];
+
+  if (
+    normalizedMessage.includes('ok cho a goi') ||
+    normalizedMessage.includes('ok cho anh goi') ||
+    normalizedMessage.includes('chot goi') ||
+    normalizedMessage.includes('lay goi nay') ||
+    normalizedMessage.includes('ok lay goi') ||
+    normalizedMessage.includes('ok roi em') ||
+    normalizedMessage.includes('ok roi') ||
+    normalizedMessage.includes('roi em') ||
+    normalizedMessage.includes('goi do') ||
+    normalizedMessage.includes('chot cho anh') ||
+    normalizedMessage.includes('chot cho a') ||
+    normalizedMessage.includes('lay goi do')
+  ) {
+    const bubbles = [
+      dailyPlan
+        ? `Dạ được anh. Em giữ sẵn gói ${dailyPlan.name} cho mình rồi, anh bấm nút Mua 2GB/ngày bên dưới là sang trang chốt đơn luôn.`
+        : 'Dạ được anh, anh bấm nút mua bên dưới là sang trang chốt đơn luôn.',
+      totalPlan ? `Nếu muốn so sánh thêm trước khi chốt thì em để sẵn một nút xem gói tổng để anh chọn nhanh.` : 'Anh bấm xong là có thể điền thông tin và thanh toán luôn.',
+    ];
+    return {
+      intent: 'sales-checkout-cta',
+      handoffRequested: false,
+      reply: bubbles.join('\n'),
+      messages: bubbles,
+      quickReplies: [],
+      actions: ctaActions,
+    };
+  }
+
+  if (
+    (normalizedMessage.includes('sim ngay') && normalizedMessage.includes('tong')) ||
+    normalizedMessage.includes('khac nhau gi') ||
+    normalizedMessage.includes('sao lai dat hon') ||
+    normalizedMessage.includes('dat hon 3gb') ||
+    normalizedMessage.includes('mua 2gb thoi')
+  ) {
+    const bubbles = [
+      'Đúng rồi anh, nhìn riêng giá tiền thì gói theo ngày sẽ thấy cao hơn gói tổng.',
+      'Bù lại gói theo ngày dễ dùng hơn cho chuyến ngắn vì mỗi ngày anh có data mới, không phải canh từng chút xem còn bao nhiêu dung lượng.',
+      'Còn gói tổng thì rẻ hơn vì mình dùng chung một cục data cho cả chu kỳ, ví dụ 3GB/15 ngày là phải tự chia 3GB đó trong suốt 15 ngày.',
+    ];
+    if (dailyPlan) {
+      bubbles.push(`Nếu anh chỉ đi ngắn 2-3 ngày thì bên em vẫn nghiêng về ${dailyPlan.name} (${dailyPlan.priceVnd}/ngày) vì đủ dùng TikTok, Maps, Facebook cho nhu cầu phổ thông.`);
+    }
+    if (totalPlan) {
+      bubbles.push(`Còn nếu anh ưu tiên tiết kiệm hơn thì có thể chuyển sang ${totalPlan.name} (${totalPlan.priceVnd}) theo kiểu gói tổng.`);
+    }
+    return {
+      intent: 'sales-explain-daily-vs-total',
+      handoffRequested: false,
+      reply: bubbles.join('\n'),
+      messages: bubbles,
+      quickReplies: [],
+      actions: ctaActions,
+    };
+  }
+
+  const shouldRecommendNow = !!tripDays && isRecommendationRequestMessage(normalizedMessage);
+  if (!shouldRecommendNow) return null;
+
+  const mainDaily = prefer2gbDaily[0] || dailyPlans[0] || null;
+  if (!mainDaily && !backupPack) return null;
+
+  const bubbles: string[] = [];
+  if (mainDaily) {
+    const perDay = Number(String(mainDaily.priceVnd).replace(/[^\d]/g, '')) || 0;
+    const total = perDay * tripDays;
+    const totalText = new Intl.NumberFormat('vi-VN').format(total) + 'đ';
+    bubbles.push(`Anh đi ${tripDays} ngày thì em nghiêng về ${mainDaily.name} (${mainDaily.priceVnd}/ngày) nha, tính ra khoảng ${totalText} cho cả chuyến.`);
+    bubbles.push('Gói này hợp kiểu đi Đông Hưng/Nam Ninh ngắn ngày, đủ dùng TikTok, Google Maps, Facebook và đỡ phải ngồi canh dung lượng liên tục.');
+  }
+  if (backupPack) {
+    bubbles.push(`Nếu anh muốn mua một lần cho gọn hơn thì em gợi ý thêm ${backupPack.name} (${backupPack.priceVnd}) theo kiểu gói tổng.`);
+  }
+  bubbles.push('Anh nghiêng về tiết kiệm hơn hay muốn dùng thoải mái hơn để em chốt đúng một gói cho anh?');
+
+  return {
+    intent: 'sales-recommendation',
+    handoffRequested: false,
+    reply: bubbles.join('\n'),
+    messages: bubbles,
+    quickReplies: [],
+    actions: ctaActions,
+  };
+};
+
+const isGreetingOnlyMessage = (normalized: string) => {
+  const compact = normalized.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const greetingPatterns = [
+    /^(alo|a lo|hello|hi|helo|hey|chao|chao em|em oi|oi em|ad oi|shop oi|tu van oi)$/,
+    /^(alo em|alo shop|alo ad|xin chao|chao shop|chao ad)$/,
+  ];
+  return greetingPatterns.some((pattern) => pattern.test(compact));
+};
+
+const buildRuleBasedChatReply = (message: string, catalogPlans: Plan[]) => {
+  const normalized = normalizeChatText(message);
+  const recommendedPlan = buildCatalogRecommendation(catalogPlans, normalized);
+  const compactPlan = catalogPlans.find((plan) => plan.slug === 'china-esim-1gb-7-days') ?? catalogPlans[0];
+  const balancedPlan = catalogPlans.find((plan) => plan.slug === 'china-esim-3gb-15-days') ?? recommendedPlan ?? catalogPlans[1] ?? compactPlan;
+  const heavyPlan = catalogPlans.find((plan) => plan.slug === 'china-esim-10gb-30-days') ?? recommendedPlan ?? catalogPlans.at(-1) ?? balancedPlan;
+  const lines: string[] = [];
+  let intent = 'general';
+  let handoffRequested = false;
+
+  if (!normalized || isGreetingOnlyMessage(normalized)) {
+    return {
+      intent: 'welcome',
+      handoffRequested: false,
+      reply:
+        'Dạ em chào anh/chị. EsimCN đang hỗ trợ tư vấn eSIM Trung Quốc. Anh/chị chuẩn bị đi mấy ngày để em gợi ý đúng gói cho mình?',
+      messages: ['Dạ em chào anh/chị 👋', 'EsimCN đang hỗ trợ tư vấn eSIM Trung Quốc.', 'Anh/chị chuẩn bị đi mấy ngày để em gợi ý đúng gói cho mình?'],
+      quickReplies: [...CHAT_QUICK_REPLIES],
+      actions: [],
+    };
+  }
+
+  if (normalized.includes('gap tu van vien') || normalized.includes('nguoi that') || normalized.includes('goi lai') || normalized.includes('tu van vien')) {
+    intent = 'handoff';
+    handoffRequested = true;
+    lines.push('EsimCN đã ghi nhận yêu cầu cần hỗ trợ thêm từ tư vấn viên.');
+    lines.push('Anh/chị vui lòng để lại số Zalo hoặc số điện thoại để đội ngũ hỗ trợ liên hệ sớm.');
+    lines.push('Trong lúc chờ, ' + balancedPlan.name + ' (' + balancedPlan.priceVnd + ') là gói được nhiều khách lựa chọn cho lịch trình phổ biến.');
+  } else if (normalized.includes('google') || normalized.includes('facebook') || normalized.includes('tiktok') || normalized.includes('gmail') || normalized.includes('maps')) {
+    intent = 'blocked-apps';
+    lines.push('Các gói eSIM của EsimCN ưu tiên tuyến IP HK/SG nên Google, Gmail, Maps, Facebook và TikTok hoạt động ổn định hơn so với roaming thông thường.');
+    lines.push('Với lịch trình khoảng 1-2 tuần, ' + balancedPlan.name + ' (' + balancedPlan.priceVnd + ') là lựa chọn phù hợp và dễ sử dụng.');
+  } else if (normalized.includes('gia') || normalized.includes('bao nhieu') || normalized.includes('bang gia') || normalized.includes('goi pho bien')) {
+    intent = 'pricing';
+    lines.push('Một số gói được khách hàng lựa chọn nhiều hiện tại:');
+    if (compactPlan) lines.push('- ' + compactPlan.name + ': ' + compactPlan.priceVnd);
+    if (balancedPlan) lines.push('- ' + balancedPlan.name + ': ' + balancedPlan.priceVnd);
+    if (heavyPlan) lines.push('- ' + heavyPlan.name + ': ' + heavyPlan.priceVnd);
+    lines.push('Anh/chị đi trong bao nhiêu ngày để EsimCN gợi ý gói phù hợp hơn?');
+  } else if (normalized.includes('esim') && (normalized.includes('iphone') || normalized.includes('samsung') || normalized.includes('ho tro'))) {
+    intent = 'device-support';
+    lines.push('Thiết bị cần hỗ trợ eSIM và ở trạng thái mở mạng để sử dụng.');
+    lines.push('Thông thường iPhone từ XS/XR trở lên và nhiều dòng Samsung/Pixel đời mới sẽ hỗ trợ eSIM.');
+    lines.push('Anh/chị có thể gửi model máy cụ thể để EsimCN kiểm tra giúp.');
+  } else if (normalized.includes('sim vat ly') || normalized.includes('sim thuong')) {
+    intent = 'physical-sim';
+    lines.push('Hiện tại EsimCN tập trung tư vấn các gói eSIM Trung Quốc để cài QR trước chuyến đi.');
+    lines.push('Nếu thiết bị không hỗ trợ eSIM, anh/chị có thể gửi model máy để được kiểm tra phương án phù hợp.');
+  } else {
+    intent = 'plan-recommendation';
+    if (recommendedPlan) {
+      lines.push('Theo nhu cầu vừa gửi, EsimCN đề xuất ' + recommendedPlan.name + ' (' + recommendedPlan.priceVnd + ').');
+      lines.push('Gói này phù hợp cho lịch trình ' + (recommendedPlan.validity || 'ngắn ngày') + ', data ' + recommendedPlan.dataAllowance + ' và nhu cầu sử dụng các ứng dụng phổ biến.');
+    } else {
+      lines.push('Anh/chị vui lòng cho biết thêm số ngày đi và nhu cầu data để EsimCN tư vấn chính xác hơn.');
+    }
+    lines.push('Anh/chị có thể gửi thêm số ngày đi và nhu cầu sử dụng để EsimCN tư vấn sát hơn.');
+  }
+
+  return {
+    intent,
+    handoffRequested,
+    reply: lines.join('\n'),
+    messages: lines.slice(0, CHAT_SETTINGS.ai.maxBubbles),
+    quickReplies: [],
+    actions: [],
+  };
+};
+
+const callOpenClawChatWebhook = async (
+  env: Bindings,
+  payload: {
+    sessionId: string;
+    message: string;
+    messages: StoredChatMessage[];
+    pageUrl?: string | null;
+    chatSettings?: typeof CHAT_SETTINGS;
+  },
+) => {
+  if (!env.OPENCLAW_CHAT_WEBHOOK) {
+    return null;
+  }
+
+  const response = await fetch(env.OPENCLAW_CHAT_WEBHOOK, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(env.OPENCLAW_CHAT_SECRET ? { authorization: `Bearer ${env.OPENCLAW_CHAT_SECRET}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenClaw webhook failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as {
+    reply?: string;
+    handoffRequested?: boolean;
+    quickReplies?: string[];
+    intent?: string;
+  };
+
+  if (!data.reply?.trim()) {
+    return null;
+  }
+
+  const rawMessages = Array.isArray((data as { messages?: unknown }).messages)
+    ? ((data as { messages?: unknown[] }).messages ?? []).filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+
+  return {
+    reply: data.reply?.trim() || rawMessages.join('\n'),
+    messages: rawMessages.length > 0 ? rawMessages.slice(0, CHAT_SETTINGS.ai.maxBubbles) : undefined,
+    handoffRequested: Boolean(data.handoffRequested),
+    quickReplies: data.quickReplies?.filter(Boolean).slice(0, 4) ?? [...CHAT_QUICK_REPLIES],
+    intent: data.intent ?? 'openclaw',
+  };
+};
+
+const serializeChatMessages = (messages: StoredChatMessage[]) =>
+  messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    body: message.body,
+    createdAt: message.created_at,
+    intent: message.intent,
+  }));
+
+const ensureChatSessionWithWelcome = async (db: D1Database, sessionId: string) => {
+  const existingMessages = await listChatMessages(db, sessionId);
+  if (existingMessages.length > 0) {
+    return existingMessages;
+  }
+
+  await appendChatMessage(
+    db,
+    sessionId,
+    'bot',
+    'Xin chào. EsimCN hỗ trợ tư vấn các gói eSIM Trung Quốc phù hợp theo lịch trình sử dụng. Anh/chị cần hỗ trợ gói nào?',
+    { intent: 'welcome' },
+  );
+  return listChatMessages(db, sessionId);
+};
+
 app.get('/styles.css', () =>
   new Response(globalStyles, {
     headers: {
@@ -3927,6 +5200,225 @@ app.get('/styles.css', () =>
     },
   }),
 );
+
+
+app.get('/chat-widget.js', () =>
+  new Response(chatWidgetScript, {
+    headers: {
+      'content-type': 'application/javascript; charset=utf-8',
+      'cache-control': 'public, max-age=300, stale-while-revalidate=86400',
+    },
+  }),
+);
+
+app.post('/api/chat/session', async (c) => {
+  if (!c.env.DB) {
+    return c.json({ ok: false, error: 'Chat database is not configured.' }, 503);
+  }
+
+  await ensureChatSchema(c.env.DB);
+  const payload = await parsePayload(c.req.raw);
+  const requestedSessionId = toText(payload.sessionId);
+  const pageUrl = toText(payload.pageUrl);
+  const source = toText(payload.source) || 'website';
+  let session = requestedSessionId ? await getChatSessionById(c.env.DB, requestedSessionId) : null;
+  if (!session) {
+    session = await createChatSession(c.env.DB, { source, pageUrl });
+  }
+
+  const messages = await ensureChatSessionWithWelcome(c.env.DB, session.id);
+  return c.json({
+    ok: true,
+    session: {
+      id: session.id,
+      status: session.status,
+      handoffRequested: Boolean(session.handoff_requested),
+    },
+    chatSettings: CHAT_SETTINGS,
+    messages: serializeChatMessages(messages),
+    quickReplies: [...CHAT_QUICK_REPLIES],
+  });
+});
+
+app.get('/api/chat/messages', async (c) => {
+  if (!c.env.DB) {
+    return c.json({ ok: false, error: 'Chat database is not configured.' }, 503);
+  }
+
+  await ensureChatSchema(c.env.DB);
+  const sessionId = c.req.query('sessionId')?.trim() || '';
+  if (!sessionId) {
+    return c.json({ ok: false, error: 'Thiếu sessionId.' }, 400);
+  }
+
+  const session = await getChatSessionById(c.env.DB, sessionId);
+  if (!session) {
+    return c.json({ ok: false, error: 'Không tìm thấy phiên chat.' }, 404);
+  }
+
+  const messages = await ensureChatSessionWithWelcome(c.env.DB, sessionId);
+  return c.json({
+    ok: true,
+    session: {
+      id: session.id,
+      status: session.status,
+      handoffRequested: Boolean(session.handoff_requested),
+    },
+    chatSettings: CHAT_SETTINGS,
+    messages: serializeChatMessages(messages),
+    quickReplies: [...CHAT_QUICK_REPLIES],
+  });
+});
+
+app.get('/api/chat/config', async (c) => c.json({ ok: true, chatSettings: CHAT_SETTINGS }));
+
+app.post('/api/chat/message', async (c) => {
+  if (!c.env.DB) {
+    return c.json({ ok: false, error: 'Chat database is not configured.' }, 503);
+  }
+
+  await ensureChatSchema(c.env.DB);
+  const payload = await parsePayload(c.req.raw);
+  const sessionId = toText(payload.sessionId);
+  const message = truncateChatText(toText(payload.message), 1200);
+  const pageUrl = toText(payload.pageUrl);
+  if (!sessionId || !message) {
+    return c.json({ ok: false, error: 'Thiếu sessionId hoặc nội dung chat.' }, 400);
+  }
+
+  const session = await getChatSessionById(c.env.DB, sessionId);
+  if (!session) {
+    return c.json({ ok: false, error: 'Không tìm thấy phiên chat.' }, 404);
+  }
+
+  await appendChatMessage(c.env.DB, sessionId, 'user', message, { intent: 'user-message', metadata: { pageUrl } });
+  const existingMessages = await listChatMessages(c.env.DB, sessionId);
+  const catalog = await loadCatalog(c.env);
+  let replyPayload: {
+    intent: string;
+    handoffRequested: boolean;
+    reply: string;
+    messages?: string[];
+    quickReplies: string[];
+    actions?: { label: string; href: string; kind?: 'primary' | 'secondary' }[];
+  } | null = null;
+
+  const userHistoryMessages = existingMessages.filter((item) => item.role === 'user').map((item) => item.body);
+  const normalizedMessage = normalizeChatText(message);
+
+  if (!normalizedMessage || isGreetingOnlyMessage(normalizedMessage)) {
+    replyPayload = buildRuleBasedChatReply(message, catalog.plans);
+  } else {
+    replyPayload = buildDeterministicSalesReply(message, userHistoryMessages, catalog.plans);
+  }
+
+  if (!replyPayload && c.env.GEMINI_API_KEY) {
+    try {
+      replyPayload = await callGeminiChat(c.env.GEMINI_API_KEY, CHAT_SETTINGS, {
+        message,
+        history: existingMessages.map((item) => ({ role: item.role, body: item.body })),
+        plans: catalog.plans,
+      });
+    } catch (error) {
+      console.error('gemini chat error', error);
+    }
+  }
+
+  if (!replyPayload) {
+    try {
+      replyPayload = await callOpenClawChatWebhook(c.env, {
+        sessionId,
+        message,
+        messages: existingMessages,
+        pageUrl,
+        chatSettings: CHAT_SETTINGS,
+      });
+    } catch (error) {
+      console.error('chat webhook error', error);
+    }
+  }
+
+  if (!replyPayload) {
+    replyPayload = buildRuleBasedChatReply(message, catalog.plans);
+  }
+  if (!replyPayload) {
+    return c.json({ ok: false, error: 'Không tạo được phản hồi chat.' }, 500);
+  }
+
+  await appendChatMessage(c.env.DB, sessionId, 'bot', replyPayload.reply, {
+    intent: replyPayload.intent,
+    metadata: { source: replyPayload.intent === 'openclaw' ? 'openclaw' : 'rule-based' },
+  });
+
+  const now = new Date().toISOString();
+  await c.env.DB
+    .prepare(
+      `UPDATE chat_sessions
+       SET page_url = COALESCE(?, page_url), status = ?, handoff_requested = ?, handoff_reason = ?, updated_at = ?, last_message_at = ?, last_intent = ?
+       WHERE id = ?`,
+    )
+    .bind(
+      pageUrl || null,
+      replyPayload.handoffRequested ? 'waiting_human' : 'bot',
+      replyPayload.handoffRequested ? 1 : session.handoff_requested,
+      replyPayload.handoffRequested ? 'customer_requested' : session.handoff_reason,
+      now,
+      now,
+      replyPayload.intent ?? null,
+      sessionId,
+    )
+    .run();
+
+  const messages = await listChatMessages(c.env.DB, sessionId);
+  return c.json({
+    ok: true,
+    session: {
+      id: sessionId,
+      status: replyPayload.handoffRequested ? 'waiting_human' : 'bot',
+    },
+    chatSettings: CHAT_SETTINGS,
+    handoffRequested: Boolean(replyPayload.handoffRequested),
+    aiMode: c.env.GEMINI_API_KEY ? 'gemini' : c.env.OPENCLAW_CHAT_WEBHOOK ? 'openclaw' : 'rule_based',
+    modelPreference: CHAT_SETTINGS.ai.preferredModel,
+    responseMode: CHAT_SETTINGS.responseMode,
+    bubbleTexts: replyPayload.messages ?? undefined,
+    actions: replyPayload.actions ?? [],
+    messages: serializeChatMessages(messages),
+    quickReplies: replyPayload.quickReplies?.slice(0, 4) ?? [...CHAT_QUICK_REPLIES],
+  });
+});
+
+app.post('/api/chat/handoff', async (c) => {
+  if (!c.env.DB) {
+    return c.json({ ok: false, error: 'Chat database is not configured.' }, 503);
+  }
+
+  await ensureChatSchema(c.env.DB);
+  const payload = await parsePayload(c.req.raw);
+  const sessionId = toText(payload.sessionId);
+  const reason = truncateChatText(toText(payload.reason) || 'manual_request', 300);
+  if (!sessionId) {
+    return c.json({ ok: false, error: 'Thiếu sessionId.' }, 400);
+  }
+
+  const session = await getChatSessionById(c.env.DB, sessionId);
+  if (!session) {
+    return c.json({ ok: false, error: 'Không tìm thấy phiên chat.' }, 404);
+  }
+
+  const now = new Date().toISOString();
+  await c.env.DB
+    .prepare(
+      `UPDATE chat_sessions
+       SET status = 'waiting_human', handoff_requested = 1, handoff_reason = ?, updated_at = ?, last_message_at = ?
+       WHERE id = ?`,
+    )
+    .bind(reason, now, now, sessionId)
+    .run();
+  await appendChatMessage(c.env.DB, sessionId, 'system', 'Khách yêu cầu gặp tư vấn viên.', { intent: 'handoff', metadata: { reason } });
+  const messages = await listChatMessages(c.env.DB, sessionId);
+  return c.json({ ok: true, handoffRequested: true, messages: serializeChatMessages(messages) });
+});
 
 app.get('/favicon.svg', () =>
   new Response(favicon, {
@@ -3937,23 +5429,32 @@ app.get('/favicon.svg', () =>
   }),
 );
 
+app.get('/og/home.jpg', () =>
+  new Response(socialPreviewImageBytes, {
+    headers: {
+      'content-type': 'image/jpeg',
+      'cache-control': 'public, max-age=604800, immutable',
+    },
+  }),
+);
+
 app.get('/plans/:slug', async (c) => {
   const catalog = await loadCatalog(c.env);
   const plan = catalog.plans.find((item) => item.slug === c.req.param('slug'));
   if (!plan) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
-  return c.html(renderPlanPage(getContext(c.env), plan, catalog.plans));
+  return c.html(renderPlanPage(await getPageContext(c.env), plan, catalog.plans));
 });
 
-app.get('/blog/:slug', (c) => {
+app.get('/blog/:slug', async (c) => {
   const article = articles.find((item) => item.slug === c.req.param('slug'));
   if (!article) {
-    return c.html(renderNotFound(getContext(c.env)), 404);
+    return c.html(renderNotFound(await getPageContext(c.env)), 404);
   }
 
-  return c.html(renderArticlePage(getContext(c.env), article));
+  return c.html(renderArticlePage(await getPageContext(c.env), article));
 });
 
 app.get('/api/plans', async (c) => {
@@ -4075,6 +5576,6 @@ app.get('/sitemap.xml', async (c) => {
   });
 });
 
-app.notFound((c) => c.html(renderNotFound(getContext(c.env)), 404));
+app.notFound(async (c) => c.html(renderNotFound(await getPageContext(c.env)), 404));
 
 export default app;

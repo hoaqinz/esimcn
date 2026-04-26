@@ -16,10 +16,10 @@
     "hono": "^4.12.9"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.1",
+    "@cloudflare/workers-types": "^4.20260405.1",
     "node-addon-api": "^8.7.0",
     "node-gyp": "^12.2.0",
     "typescript": "^6.0.2",
-    "wrangler": "^4.77.0"
+    "wrangler": "^4.80.0"
   }
 }
