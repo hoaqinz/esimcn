@@ -377,6 +377,12 @@ const renderMobileIcon = (
     | 'qr'
     | 'globe'
     | 'headset'
+    | 'phone'
+    | 'mail'
+    | 'home'
+    | 'grid'
+    | 'file'
+    | 'book'
     | 'shield'
     | 'gear'
     | 'arrow-right'
@@ -399,6 +405,18 @@ const renderMobileIcon = (
       return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.05"/><path d="M3.8 12h16.4M12 3.5c2.2 2.3 3.5 5.3 3.5 8.5S14.2 18.2 12 20.5M12 3.5c-2.2 2.3-3.5 5.3-3.5 8.5S9.8 18.2 12 20.5" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round"/></svg>`;
     case 'headset':
       return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.8 12.8a7.2 7.2 0 0 1 14.4 0M6.2 13h2.3v5.2H7.8A1.6 1.6 0 0 1 6.2 16.6V13Zm9.3 0h2.3v3.6a1.6 1.6 0 0 1-1.6 1.6h-.7V13Z" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    case 'phone':
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.8h9A1.7 1.7 0 0 1 18.2 6.5v11A1.7 1.7 0 0 1 16.5 19.2h-9a1.7 1.7 0 0 1-1.7-1.7v-11A1.7 1.7 0 0 1 7.5 4.8Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M10 7.8h4M11 16.2h2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>`;
+    case 'mail':
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7.5 12 13l7.5-5.5V18a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V7.5Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M4.5 8 12 13.5 19.5 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 18V7l7.5 5.6L19.5 7v11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>`;
+    case 'home':
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10.2 12 4l7.5 6.2V19a1 1 0 0 1-1 1H14v-5h-4v5H5.5a1 1 0 0 1-1-1v-8.8Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>`;
+    case 'grid':
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h6v6H5V5Zm8 0h6v6h-6V5ZM5 13h6v6H5v-6Zm8 0h6v6h-6v-6Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>`;
+    case 'file':
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3.8h5l4 4V20a1.2 1.2 0 0 1-1.2 1.2H8A1.2 1.2 0 0 1 6.8 20V5A1.2 1.2 0 0 1 8 3.8Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M10 12h4M10 16h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>`;
+    case 'book':
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.2h8.6a2.4 2.4 0 0 1 2.4 2.4v11H8.4A2.4 2.4 0 0 0 6 21V5.2Zm0 0A2.2 2.2 0 0 0 3.8 7.4V19A2.2 2.2 0 0 0 6 21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M9.2 9h5.2M9.2 12.4h5.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>`;
     case 'shield':
       return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 6v5.2c0 4.1 2.6 7.8 6.5 9.3 3.9-1.5 6.5-5.2 6.5-9.3V6L12 3Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="m8.8 12 2 2 4.4-4.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     case 'gear':
@@ -3743,6 +3761,15 @@ const layout = ({
       }, true);
     </script>`;
   const siteChatTag = pathname.startsWith('/admin') ? '' : `<script src="/chat-widget.js?v=${STYLE_VERSION}" defer></script>`;
+  const shouldRenderMobileBottomNav =
+    pathname === '/' ||
+    pathname === '/goi-esim' ||
+    pathname.startsWith('/plans/') ||
+    pathname.startsWith('/mua-goi') ||
+    pathname.startsWith('/thanh-toan/') ||
+    pathname.startsWith('/thanh-toan-thanh-cong/') ||
+    pathname.startsWith('/tra-cuu-don') ||
+    pathname.startsWith('/don-cua-toi');
 
   return `<!doctype html>
 <html lang="vi">
@@ -3779,6 +3806,7 @@ const layout = ({
     <div class="page-shell">
       ${body}
     </div>
+    ${shouldRenderMobileBottomNav ? renderMobileBottomNav(pathname) : ''}
     ${siteChatTag}
     <script>${pageScript}</script>
   </body>
@@ -4218,6 +4246,50 @@ const renderBadgeChip = (label: string, tone: 'tiktok' | 'unlimited', dataAttr =
   `<span class="home-inline-badge is-${tone} badge-has-icon"${dataAttr}${hidden ? ' hidden' : ''}><span class="badge-icon">${renderMobileIcon(
     tone === 'tiktok' ? 'tiktok' : 'spark',
   )}</span><span>${escapeHtml(label)}</span></span>`;
+const renderMobileBrandLink = (context: RenderContext, extraClass = '', href = '/') =>
+  `<a class="mobile-app-brand${hasCustomLogo(context) ? ' mobile-app-brand-logo-only' : ' mobile-app-brand-wordmark'}${extraClass ? ` ${extraClass}` : ''}" href="${href}" aria-label="${escapeHtml(context.siteName)}">
+    ${
+      hasCustomLogo(context)
+        ? renderMobileBrandImage(context, 'mobile-app-brand-image')
+        : `<span class="mobile-app-brand-copy">
+        <strong>eSIM</strong>
+        <small>CHINA</small>
+      </span>`
+    }
+  </a>`;
+const renderMobileBottomNav = (pathname: string) => {
+  const navItems = [
+    { href: '/', label: 'Trang Chủ', icon: 'home' as const, active: pathname === '/' },
+    { href: '/goi-esim', label: 'Gói eSIM', icon: 'grid' as const, active: pathname === '/goi-esim' || pathname.startsWith('/plans/') },
+    {
+      href: '/mua-goi',
+      label: 'Mua gói',
+      icon: 'cart' as const,
+      active: pathname.startsWith('/mua-goi') || pathname.startsWith('/thanh-toan/') || pathname.startsWith('/thanh-toan-thanh-cong/'),
+    },
+    {
+      href: '/tra-cuu-don',
+      label: 'Đơn của tôi',
+      icon: 'file' as const,
+      active: pathname.startsWith('/tra-cuu-don') || pathname.startsWith('/don-cua-toi'),
+    },
+    { href: '/#how', label: 'Hướng dẫn', icon: 'book' as const, active: false },
+  ];
+
+  return `<nav class="mobile-bottom-nav" aria-label="Điều hướng mobile">
+    <div class="mobile-bottom-nav-grid">
+      ${navItems
+        .map(
+          (item) => `
+      <a class="mobile-bottom-nav-link${item.active ? ' is-active' : ''}" href="${item.href}">
+        <span class="mobile-bottom-nav-icon">${renderMobileIcon(item.icon)}</span>
+        <span>${item.label}</span>
+      </a>`,
+        )
+        .join('')}
+    </div>
+  </nav>`;
+};
 const renderSupportIconRow = (enabled: boolean, dataAttr = '', hidden = false) => {
   if (!enabled) {
     return `<div class="support-app-row"${dataAttr}${hidden ? ' hidden' : ''}><span class="support-app-text">Mạng nội địa</span></div>`;
@@ -5297,6 +5369,12 @@ export const renderHomePage = (context: RenderContext, planList: Plan[] = plans,
       copy: 'Hỗ trợ khi cần cài đặt hoặc kích hoạt eSIM.',
     },
   ];
+  const mobileSupportItems = [
+    { icon: 'qr' as const, title: 'Nhận QR', copy: 'Trong vài phút' },
+    { icon: 'phone' as const, title: 'Giữ SIM chính', copy: 'Không tháo máy' },
+    { icon: 'headset' as const, title: 'Hỗ trợ', copy: 'Khi cần cài đặt' },
+  ];
+  const mobileCities = ['Bắc Kinh', 'Thượng Hải', 'Quảng Châu', 'Thâm Quyến', 'Hàng Châu', 'Thành Đô'];
   const heroHighlights = [
     'Hỗ trợ TikTok, Google, Gmail và Maps',
     'QR gửi qua email sau thanh toán',
@@ -5304,6 +5382,25 @@ export const renderHomePage = (context: RenderContext, planList: Plan[] = plans,
   ];
   const desktopHeroPlan = featuredPlan ?? cheapestPlan ?? visiblePlans[0];
   const desktopQuickPlans = getHomeFeaturedPlans(publicPlans).slice(0, 8);
+  const mobileFeaturedDeals = desktopQuickPlans.slice(0, 3);
+  const mobileQuickCatalogPlans = [...choicePlans, ...desktopQuickPlans.filter((plan) => !choicePlans.includes(plan))].slice(0, 6);
+  const mobileGuideSteps = [
+    {
+      icon: 'phone' as const,
+      title: 'Chọn gói theo lịch trình',
+      copy: 'Đi ngắn chọn gói nhẹ, ở lâu chọn gói nhiều ngày hoặc nhiều data hơn.',
+    },
+    {
+      icon: 'qr' as const,
+      title: 'Thanh toán QR ngân hàng',
+      copy: 'Quét mã, chuyển đúng nội dung và chờ hệ thống tự đối soát đơn.',
+    },
+    {
+      icon: 'mail' as const,
+      title: 'Nhận QR qua email',
+      copy: 'Cài eSIM trước chuyến đi, tới nơi chỉ cần bật data để dùng.',
+    },
+  ];
   const desktopReasonCards = [
     {
       title: 'Nhận QR nhanh',
@@ -5383,25 +5480,33 @@ ${header(context)}
 <main class="detail-home">
   <section class="mobile-app-shell reveal">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand${hasCustomLogo(context) ? ' mobile-app-brand-logo-only' : ' mobile-app-brand-wordmark'}" href="/" aria-label="${escapeHtml(context.siteName)}">
-        ${hasCustomLogo(context)
-          ? renderMobileBrandImage(context, 'mobile-app-brand-image')
-          : `<span class="mobile-app-brand-copy">
-          <strong>eSIM</strong>
-          <small>CHINA</small>
-        </span>`}
-      </a>
+      ${renderMobileBrandLink(context)}
       <a class="mobile-app-control" href="/tra-cuu-don" aria-label="Mở lại đơn đã mua">Đơn của tôi</a>
     </div>
 
     <article class="mobile-app-banner" aria-label="${escapeHtml(context.homeHeroTitle)}">
-      ${
-        mobileBannerImageUrl
-          ? heroBannerImageUrls.length > 1
-            ? `<div class="mobile-app-banner-gallery" data-hero-banner-gallery>${renderHeroBannerImages('mobile-app-banner-image')}</div>`
-            : `<img class="mobile-app-banner-image" src="${escapeHtml(mobileBannerImageUrl)}" alt="${escapeHtml(context.homeHeroTitle)}" loading="eager" decoding="async" />`
-          : ''
-      }
+      <div class="mobile-app-banner-media">
+        ${
+          mobileBannerImageUrl
+            ? heroBannerImageUrls.length > 1
+              ? `<div class="mobile-app-banner-gallery" data-hero-banner-gallery>${renderHeroBannerImages('mobile-app-banner-image')}</div>`
+              : `<img class="mobile-app-banner-image" src="${escapeHtml(mobileBannerImageUrl)}" alt="${escapeHtml(context.homeHeroTitle)}" loading="eager" decoding="async" />`
+            : ''
+        }
+      </div>
+      <div class="mobile-app-banner-overlay" aria-hidden="true"></div>
+      <div class="mobile-app-banner-content">
+        <span class="mobile-app-banner-flag" aria-hidden="true">🇨🇳</span>
+        <div class="mobile-app-banner-copy">
+          <h2>${escapeHtml(context.homeHeroTitle)}</h2>
+          <p>${escapeHtml(context.homeHeroDescription)}</p>
+        </div>
+        <a class="mobile-app-banner-cta" href="#mobile-picker">
+          <span class="mobile-app-banner-cta-icon">${renderMobileIcon('spark')}</span>
+          <span>Xem gói</span>
+          <span class="mobile-app-banner-cta-arrow">${renderMobileIcon('arrow-right')}</span>
+        </a>
+      </div>
     </article>
     ${
       heroBannerImageUrls.length > 1
@@ -5450,14 +5555,45 @@ ${header(context)}
 
     <section class="mobile-app-offer-head">
       <h2>Chọn gói eSIM Trung Quốc</h2>
-      <p>Chọn số ngày và dung lượng phù hợp <span>››</span></p>
+      <p>Chọn gói phù hợp với chuyến đi của bạn</p>
+    </section>
+
+    <section class="mobile-app-deals" aria-label="Gói nổi bật trên mobile">
+      ${mobileFeaturedDeals
+        .map(
+          (plan, index) => `
+      <article class="mobile-app-deal-card reveal">
+        <a class="mobile-app-deal-hero" href="${buildPurchasePath(plan, isUnlimitedDayPlan(plan) ? 1 : undefined)}" data-plan-target="${plan.slug}" data-plan-name="${getPublicPlanName(plan)}">
+          <span class="mobile-app-deal-label">${escapeHtml(index === 0 ? 'Mạng 5G' : index === 1 ? 'Bán chạy' : 'Nhiều data')}</span>
+          <div class="mobile-app-deal-title">${escapeHtml(plan.catalogGroup === 'combo' ? 'Liên vùng China' : index === 0 ? 'Trung Quốc đại lục' : 'Du lịch Trung Quốc')}</div>
+          <div class="mobile-app-deal-meta">${escapeHtml(isUnlimitedDayPlan(plan) ? `${plan.dataAllowance} / 1 ngày` : `${plan.dataAllowance} / ${plan.validity}`)}</div>
+          <span class="mobile-app-deal-mark">eSIM</span>
+        </a>
+        <div class="mobile-app-deal-body">
+          <a class="mobile-app-deal-name" href="${buildPurchasePath(plan, isUnlimitedDayPlan(plan) ? 1 : undefined)}" data-plan-target="${plan.slug}" data-plan-name="${getPublicPlanName(plan)}">${escapeHtml(getFeaturedPlanCardName(plan))}</a>
+          <div class="mobile-app-deal-rating">
+            <span>${index === 0 ? '4.7 / 5' : index === 1 ? '4.8 / 5' : '4.8 / 5'}</span>
+            <small>${escapeHtml(index === 0 ? '16.619 đánh giá' : index === 1 ? '26.804 đánh giá' : '9.841 đánh giá')}</small>
+          </div>
+          <p class="mobile-app-deal-note">${escapeHtml(getFeaturedPlanSupportCopy(plan))}</p>
+          <div class="mobile-app-deal-bottom">
+            <div class="mobile-app-deal-price">
+              <small>${escapeHtml(getFeaturedPlanPriceLabel(plan))}</small>
+              <strong>${escapeHtml(plan.priceVnd)}</strong>
+            </div>
+            <a class="mobile-app-deal-button" href="${buildPurchasePath(plan, isUnlimitedDayPlan(plan) ? 1 : undefined)}" data-plan-target="${plan.slug}" data-plan-name="${getPublicPlanName(plan)}">Mua</a>
+          </div>
+        </div>
+      </article>`,
+        )
+        .join('')}
     </section>
 
     <section class="mobile-app-plan-picker reveal" id="mobile-picker">
       <div class="mobile-app-plan-slider-head">
         <div class="mobile-app-plan-slider-copy">
-        <small>Gói eSIM Trung Quốc</small>
-          <strong>Chọn số ngày và dung lượng để xem đúng mức giá cần mua</strong>
+        <small>Tùy chỉnh gói</small>
+          <strong>Chọn số ngày, dung lượng là ra tiền ngay</strong>
         </div>
       </div>
 
@@ -5618,6 +5754,89 @@ ${header(context)}
           data-plan-variant="${getDayPassVariantLabel(plan)}"
           data-plan-variant-detail="${getDayPassVariantDetail(plan)}"
         ></span>`,
+          )
+          .join('')}
+      </div>
+    </section>
+
+    <section class="mobile-app-plan-grid" aria-label="Gói eSIM chọn nhanh">
+      ${mobileQuickCatalogPlans
+        .map(
+          (plan, index) => `
+      <article class="mobile-app-plan-card${index === 1 ? ' is-featured' : ''}">
+        <div class="mobile-app-plan-copy">
+          <div class="mobile-app-plan-headbar">
+            <strong>${escapeHtml(plan.dataAllowance)}</strong>
+            <span>${escapeHtml(isUnlimitedDayPlan(plan) ? '/ ngày' : '')}</span>
+          </div>
+          <em>${escapeHtml(plan.validity)}</em>
+          <b class="mobile-app-plan-name">${escapeHtml(getFeaturedPlanCardName(plan))}</b>
+          <p>${escapeHtml(plan.coverage)}</p>
+        </div>
+        <div class="mobile-app-plan-side">
+          <div class="mobile-app-plan-price">${escapeHtml(plan.priceVnd)}</div>
+          <a class="mobile-app-plan-cta" href="${buildPurchasePath(plan, isUnlimitedDayPlan(plan) ? 1 : undefined)}" data-plan-target="${plan.slug}" data-plan-name="${getPublicPlanName(plan)}">Mua gói</a>
+        </div>
+      </article>`,
+        )
+        .join('')}
+    </section>
+
+    <section class="mobile-app-note">
+      ${renderMobileIcon('spark')}
+      <span>Mua xong nhận QR, cài trước khi bay</span>
+    </section>
+
+    <section class="mobile-app-support-strip">
+      ${mobileSupportItems
+        .map(
+          (item) => `
+      <article class="mobile-app-support-item">
+        <span class="mobile-app-support-icon">${renderMobileIcon(item.icon)}</span>
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${escapeHtml(item.copy)}</small>
+        </div>
+      </article>`,
+        )
+        .join('')}
+    </section>
+
+    <section class="mobile-app-cta-row">
+      <div class="mobile-app-store-head">
+        <span class="mobile-app-store-mark">${renderMobileIcon('globe')}</span>
+        <div class="mobile-app-store-copy">
+          <strong>Gói đi Trung Quốc</strong>
+          <p>Bắc Kinh, Thượng Hải, Quảng Châu</p>
+        </div>
+      </div>
+      <a class="mobile-app-store-button" href="/goi-esim">Xem đủ gói</a>
+    </section>
+
+    <section class="mobile-app-city-card">
+      ${mobileCities
+        .map(
+          (city) => `<a class="mobile-app-city-chip" href="/goi-esim">${escapeHtml(city)}</a>`,
+        )
+        .join('')}
+    </section>
+
+    <section class="mobile-app-guide">
+      <div class="mobile-app-guide-head">
+        <span>Hướng dẫn</span>
+        <h2>3 bước là dùng được</h2>
+      </div>
+      <div class="mobile-app-guide-list">
+        ${mobileGuideSteps
+          .map(
+            (item, index) => `
+        <article class="mobile-app-guide-item">
+          <span class="mobile-app-guide-icon">${renderMobileIcon(item.icon)}</span>
+          <div class="mobile-app-guide-copy">
+            <strong>${index + 1}. ${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(item.copy)}</p>
+          </div>
+        </article>`,
           )
           .join('')}
       </div>
@@ -6458,12 +6677,7 @@ ${header(context)}
 <section class="checkout-mobile-top">
   <div class="wrap">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand mobile-app-brand-wordmark" href="/">
-        <span class="mobile-app-brand-copy">
-          <strong>eSIM</strong>
-          <small>CHINA</small>
-        </span>
-      </a>
+      ${renderMobileBrandLink(context)}
       <a class="checkout-mobile-back" href="/">Về trang chủ</a>
     </div>
     <section class="mobile-app-offer-head checkout-mobile-head">
@@ -6599,12 +6813,7 @@ ${header(context)}
 <section class="checkout-mobile-top">
   <div class="wrap">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand mobile-app-brand-wordmark" href="/">
-        <span class="mobile-app-brand-copy">
-          <strong>eSIM</strong>
-          <small>CHINA</small>
-        </span>
-      </a>
+      ${renderMobileBrandLink(context)}
       <a class="checkout-mobile-back" href="/tra-cuu-don">Đơn của tôi</a>
     </div>
     <section class="mobile-app-offer-head checkout-mobile-head">
@@ -6755,12 +6964,7 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
 <section class="checkout-mobile-top">
   <div class="wrap">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand mobile-app-brand-wordmark" href="/">
-        <span class="mobile-app-brand-copy">
-          <strong>eSIM</strong>
-          <small>CHINA</small>
-        </span>
-      </a>
+      ${renderMobileBrandLink(context)}
       <a class="checkout-mobile-back" href="/">Về trang chủ</a>
     </div>
     <section class="mobile-app-offer-head checkout-mobile-head">
@@ -6961,12 +7165,7 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Chọn lại gói' })}
 <section class="checkout-mobile-top">
   <div class="wrap">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand mobile-app-brand-wordmark" href="/">
-        <span class="mobile-app-brand-copy">
-          <strong>eSIM</strong>
-          <small>CHINA</small>
-        </span>
-      </a>
+      ${renderMobileBrandLink(context)}
       <a class="checkout-mobile-back" href="/">Về trang chủ</a>
     </div>
     <section class="mobile-app-offer-head checkout-mobile-head">
@@ -7332,12 +7531,7 @@ ${header(context, { ctaHref: '/', ctaLabel: 'Về trang chủ' })}
 <section class="checkout-mobile-top">
   <div class="wrap">
     <div class="mobile-app-nav">
-      <a class="mobile-app-brand mobile-app-brand-wordmark" href="/">
-        <span class="mobile-app-brand-copy">
-          <strong>eSIM</strong>
-          <small>CHINA</small>
-        </span>
-      </a>
+      ${renderMobileBrandLink(context)}
       <a class="checkout-mobile-back" href="/">Về trang chủ</a>
     </div>
     <section class="mobile-app-offer-head checkout-mobile-head">

@@ -6453,6 +6453,10 @@ textarea:focus {
     --wrap: calc(100vw - 18px);
   }
 
+  .page-shell {
+    padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  }
+
   .page-checkout .wrap,
   .checkout-mobile-top .wrap {
     width: min(100%, calc(100vw - 24px));
@@ -6477,6 +6481,10 @@ textarea:focus {
   .checkout-mobile-top {
     display: block;
     padding: 8px 0 4px;
+  }
+
+  .mobile-bottom-nav {
+    display: block;
   }
 
   .checkout-mobile-top .wrap {
@@ -7401,11 +7409,12 @@ textarea:focus {
   }
 
   .mobile-app-banner {
-    min-height: 0;
-    padding: 0;
+    position: relative;
+    min-height: 246px;
+    padding: 16px;
     border-radius: 20px;
     overflow: hidden;
-    background: transparent;
+    background: linear-gradient(135deg, #fff8f5 0%, #fff5ef 100%);
     box-shadow: 0 18px 36px rgba(154, 108, 86, 0.12);
   }
 
@@ -7413,20 +7422,58 @@ textarea:focus {
     display: none;
   }
 
+  .mobile-app-banner-media {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .mobile-app-banner-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(90deg, rgba(255, 248, 245, 0.98) 0%, rgba(255, 248, 245, 0.84) 46%, rgba(255, 248, 245, 0.28) 82%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
+  }
+
+  .mobile-app-banner-content {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    gap: 12px;
+    max-width: 13rem;
+  }
+
+  .mobile-app-banner-flag {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ef5b4e, #d63d35);
+    box-shadow: 0 12px 24px rgba(214, 61, 53, 0.24);
+    display: inline-grid;
+    place-items: center;
+    font-size: 1.05rem;
+  }
+
   .mobile-app-banner-image {
     width: 100%;
-    height: auto;
+    height: 100%;
     display: block;
+    object-fit: cover;
   }
 
   .mobile-app-banner-gallery {
+    display: block;
     align-items: stretch;
-    aspect-ratio: 16 / 9;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
   }
 
   .mobile-app-banner-gallery .mobile-app-banner-image {
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
   }
 
   .rose-plan-strip {
@@ -7528,25 +7575,27 @@ textarea:focus {
   }
 
   .mobile-app-banner-copy {
+    display: grid;
     gap: 10px;
     margin-top: 0;
-    max-width: 11.9rem;
+    max-width: 13rem;
   }
 
   .mobile-app-banner-copy h2 {
     margin: 0;
     color: #231d1b;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.98rem;
-    line-height: 1.08;
-    letter-spacing: -0.045em;
+    font-size: 1.68rem;
+    line-height: 1.02;
+    letter-spacing: -0.04em;
   }
 
   .mobile-app-banner-copy p {
     margin: 0;
     color: #413632;
-    font-size: 0.72rem;
-    line-height: 1.38;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.5;
   }
 
   .mobile-app-banner-cta {
@@ -7586,6 +7635,7 @@ textarea:focus {
   .mobile-app-banner-cta svg,
   .mobile-app-feature-icon svg,
   .mobile-app-support-icon svg,
+  .mobile-app-guide-icon svg,
   .mobile-app-note svg,
   .mobile-app-store-mark svg,
   .mobile-app-store-button svg {
@@ -7668,6 +7718,182 @@ textarea:focus {
   .mobile-app-offer-head p span {
     color: #d7c3ba;
     letter-spacing: -0.1em;
+  }
+
+  .mobile-app-deals {
+    display: flex;
+    gap: 12px;
+    margin: 2px -10px 0;
+    padding: 0 10px 2px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-app-deals::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-app-deal-card {
+    min-width: 214px;
+    max-width: 214px;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid #e3dbe8;
+    background: #fff;
+    box-shadow: 0 14px 30px rgba(57, 64, 86, 0.1);
+    scroll-snap-align: start;
+  }
+
+  .mobile-app-deal-hero {
+    position: relative;
+    display: block;
+    min-height: 96px;
+    padding: 12px;
+    background: linear-gradient(135deg, #b650ff 0%, #9e48f5 42%, #7046f4 100%);
+    color: #fff;
+  }
+
+  .mobile-app-deal-card:nth-child(2) .mobile-app-deal-hero {
+    background: linear-gradient(135deg, #bdefff 0%, #f1dfb8 48%, #f6b64f 100%);
+    color: #201d1b;
+  }
+
+  .mobile-app-deal-card:nth-child(3) .mobile-app-deal-hero {
+    background: linear-gradient(135deg, #ff8c6a 0%, #f25a50 46%, #d84238 100%);
+  }
+
+  .mobile-app-deal-label {
+    display: inline-flex;
+    min-height: 20px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.24);
+    align-items: center;
+    font-size: 0.56rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .mobile-app-deal-title {
+    margin-top: 14px;
+    max-width: 7rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.24rem;
+    font-weight: 800;
+    line-height: 0.96;
+    letter-spacing: -0.02em;
+  }
+
+  .mobile-app-deal-meta {
+    margin-top: 6px;
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+
+  .mobile-app-deal-mark {
+    position: absolute;
+    right: 12px;
+    top: 34px;
+    width: 40px;
+    height: 56px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.16);
+    display: grid;
+    place-items: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(6px);
+  }
+
+  .mobile-app-deal-body {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .mobile-app-deal-name {
+    color: #251d1a;
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.34;
+  }
+
+  .mobile-app-deal-rating {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-app-deal-rating span {
+    display: inline-flex;
+    min-height: 18px;
+    padding: 0 6px;
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+    background: #3364f5;
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: 800;
+  }
+
+  .mobile-app-deal-rating small {
+    color: #6f7892;
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+
+  .mobile-app-deal-note {
+    margin: 0;
+    color: #5f514b;
+    font-size: 0.68rem;
+    line-height: 1.5;
+  }
+
+  .mobile-app-deal-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .mobile-app-deal-price {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mobile-app-deal-price small {
+    color: #727b91;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .mobile-app-deal-price strong {
+    color: #2f5bd7;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .mobile-app-deal-button {
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: #3364f5;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.66rem;
+    font-weight: 800;
   }
 
   .mobile-app-plan-picker {
@@ -8419,8 +8645,8 @@ textarea:focus {
 
   .mobile-app-plan-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     align-items: stretch;
   }
 
@@ -8430,7 +8656,7 @@ textarea:focus {
     grid-template-rows: minmax(0, 1fr) auto;
     align-content: stretch;
     gap: 8px;
-    padding: 8px 6px 8px;
+    padding: 10px 8px;
     border-radius: 14px;
     border: 1px solid rgba(237, 225, 219, 0.92);
     background: #ffffff;
@@ -8455,9 +8681,9 @@ textarea:focus {
   }
 
   .mobile-app-plan-headbar {
-    min-height: 40px;
-    margin: -8px -6px 0;
-    padding: 8px 6px 5px;
+    min-height: 42px;
+    margin: -10px -8px 0;
+    padding: 10px 8px 6px;
     border-radius: 12px 12px 10px 10px;
     background: linear-gradient(135deg, #f87364, #e44c41);
     color: #fff;
@@ -8513,6 +8739,14 @@ textarea:focus {
     font-weight: 700;
   }
 
+  .mobile-app-plan-name {
+    color: #251d1a;
+    font-size: 0.74rem;
+    font-weight: 800;
+    line-height: 1.28;
+    text-align: center;
+  }
+
   .mobile-app-plan-kicker {
     color: #7e6d66;
     font-size: 0.72rem;
@@ -8560,19 +8794,22 @@ textarea:focus {
   .mobile-app-plan-price {
     color: #d23e36;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.78rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     text-align: center;
   }
 
   .mobile-app-plan-cta {
-    min-height: 28px;
-    padding: 0 8px;
+    min-height: 34px;
+    padding: 0 10px;
     border-radius: 10px;
     background: linear-gradient(135deg, #f66456, #dd453c);
     box-shadow: 0 12px 18px rgba(221, 69, 60, 0.2);
     color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.58rem;
     font-weight: 700;
   }
@@ -8605,6 +8842,7 @@ textarea:focus {
   }
 
   .mobile-app-support-item {
+    display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: 8px;
@@ -8699,6 +8937,167 @@ textarea:focus {
     gap: 8px;
     font-size: 0.92rem;
     font-weight: 700;
+  }
+
+  .mobile-app-city-card {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(235, 224, 218, 0.92);
+    background: #ffffff;
+    box-shadow: 0 18px 36px rgba(154, 108, 86, 0.12);
+  }
+
+  .mobile-app-city-chip {
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: #fff4ef;
+    color: #d74d43;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+
+  .mobile-app-guide {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .mobile-app-guide-head {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .mobile-app-guide-head span {
+    display: inline-flex;
+    min-height: 24px;
+    padding: 0 12px;
+    border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    background: #fff1df;
+    color: #b66b12;
+    font-size: 0.58rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .mobile-app-guide-head h2 {
+    margin: 0;
+    color: #221b18;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.24rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .mobile-app-guide-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .mobile-app-guide-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(236, 223, 217, 0.96);
+    background: #ffffff;
+    box-shadow: 0 12px 24px rgba(178, 101, 59, 0.06);
+  }
+
+  .mobile-app-guide-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff0eb;
+    color: #df4c42;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .mobile-app-guide-copy {
+    display: grid;
+    gap: 4px;
+  }
+
+  .mobile-app-guide-copy strong {
+    color: #251d1a;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .mobile-app-guide-copy p {
+    margin: 0;
+    color: #6f5f58;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    z-index: 48;
+    width: min(100%, 404px);
+    transform: translateX(-50%);
+    border-top: 1px solid rgba(236, 223, 217, 0.96);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 -16px 34px rgba(154, 108, 86, 0.1);
+    backdrop-filter: blur(18px);
+    display: none;
+  }
+
+  .mobile-bottom-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-bottom-nav-link {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    min-height: 52px;
+    padding: 6px 4px;
+    border-radius: 14px;
+    color: #8a776f;
+    font-size: 0.54rem;
+    font-weight: 800;
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .mobile-bottom-nav-link.is-active {
+    background: #fff0eb;
+    color: #df5147;
+  }
+
+  .mobile-bottom-nav-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .mobile-bottom-nav-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
   }
 
   .store-title,
